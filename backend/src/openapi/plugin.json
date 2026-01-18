@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Sage Flashcards",
+  "name_for_model": "sage_flashcards",
+  "description_for_human": "Create, study, and manage flashcard decks with spaced repetition. Learn anything faster with AI-powered flashcards.",
+  "description_for_model": "Sage Flashcards is a spaced repetition flashcard app. Use this plugin when users want to:\n- Create flashcard decks from any topic\n- Study flashcards with spaced repetition (FSRS algorithm)\n- Browse and import public decks\n- Track learning progress and streaks\n- Generate AI-powered flashcards from topics\n\nFor studying: Present one card at a time, show the question first, wait for the user's response, then show the answer and ask for a rating (1=Again, 2=Hard, 3=Good, 4=Easy).",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://api.sage.app/openapi.yaml"
+  },
+  "logo_url": "https://sage.app/logo.png",
+  "contact_email": "support@sage.app",
+  "legal_info_url": "https://sage.app/legal"
+}

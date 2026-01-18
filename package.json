@@ -1,0 +1,31 @@
+{
+  "name": "sage",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "app",
+    "backend",
+    "shared"
+  ],
+  "scripts": {
+    "app": "npm run --workspace=app",
+    "backend": "npm run --workspace=backend",
+    "dev": "concurrently \"npm run dev --workspace=app\" \"npm run dev --workspace=backend\"",
+    "dev:app": "npm run dev --workspace=app",
+    "dev:backend": "npm run dev --workspace=backend",
+    "build": "npm run build --workspace=app && npm run build --workspace=backend",
+    "clean": "rm -rf node_modules app/node_modules backend/node_modules shared/node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@react-native-community/cli-server-api": "^20.1.0",
+    "expo-router": "~3.4.10",
+    "react-native": "0.73.6"
+  }
+}

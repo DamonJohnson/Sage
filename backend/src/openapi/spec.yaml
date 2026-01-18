@@ -1,0 +1,514 @@
+openapi: 3.1.0
+info:
+  title: Sage Flashcards API
+  description: |
+    API for the Sage flashcard application with spaced repetition learning.
+    Supports deck management, card creation, study sessions with FSRS algorithm,
+    and AI-powered card generation.
+  version: 1.0.0
+  contact:
+    email: support@sage.app
+
+servers:
+  - url: https://api.sage.app
+    description: Production server
+  - url: http://localhost:3001
+    description: Development server
+
+paths:
+  /api/health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/decks:
+    get:
+      operationId: listDecks
+      summary: List user's flashcard decks
+      description: Returns all decks belonging to the authenticated user with study statistics
+      responses:
+        '200':
+          description: List of decks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeckListResponse'
+
+    post:
+      operationId: createDeck
+      summary: Create a new flashcard deck
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                  description: Deck title
+                  example: Spanish Vocabulary
+                description:
+                  type: string
+                  description: Deck description
+                isPublic:
+                  type: boolean
+                  default: false
+                category:
+                  type: string
+                  example: Languages
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Deck created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeckResponse'
+
+  /api/decks/{deckId}:
+    get:
+      operationId: getDeck
+      summary: Get deck with all cards
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deck details with cards
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeckWithCardsResponse'
+
+  /api/decks/{deckId}/cards:
+    post:
+      operationId: addCards
+      summary: Add cards to a deck
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - cards
+              properties:
+                cards:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - front
+                      - back
+                    properties:
+                      front:
+                        type: string
+                        description: Question or front of card
+                      back:
+                        type: string
+                        description: Answer or back of card
+                      cardType:
+                        type: string
+                        enum: [flashcard, multiple_choice]
+                        default: flashcard
+                      options:
+                        type: array
+                        items:
+                          type: string
+                        description: Options for multiple choice cards
+      responses:
+        '201':
+          description: Cards added
+
+  /api/study/due:
+    get:
+      operationId: getDueCards
+      summary: Get cards due for review
+      description: Returns cards that are due for review based on FSRS scheduling
+      parameters:
+        - name: deckId
+          in: query
+          schema:
+            type: string
+          description: Filter by specific deck
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+          description: Maximum cards to return
+      responses:
+        '200':
+          description: Due cards with scheduling info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DueCardsResponse'
+
+  /api/study/review:
+    post:
+      operationId: submitReview
+      summary: Submit a card review
+      description: |
+        Submit a review for a card. Rating determines the next review interval:
+        - 1 (Again): Card was forgotten, will be shown again soon
+        - 2 (Hard): Struggled to remember, shorter interval
+        - 3 (Good): Remembered with some effort, normal interval
+        - 4 (Easy): Instant recall, longer interval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - cardId
+                - rating
+              properties:
+                cardId:
+                  type: string
+                rating:
+                  type: integer
+                  enum: [1, 2, 3, 4]
+                  description: "1=Again, 2=Hard, 3=Good, 4=Easy"
+                reviewTimeMs:
+                  type: integer
+                  description: Time spent reviewing in milliseconds
+      responses:
+        '200':
+          description: Review recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewResponse'
+
+  /api/study/stats:
+    get:
+      operationId: getStudyStats
+      summary: Get study statistics
+      description: Returns learning statistics including streak, cards reviewed, and progress
+      responses:
+        '200':
+          description: Study statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+
+  /api/ai/generate-from-topic:
+    post:
+      operationId: generateFromTopic
+      summary: Generate flashcards from a topic
+      description: Uses AI to generate flashcard questions and answers about any topic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - topic
+              properties:
+                topic:
+                  type: string
+                  description: The topic to generate cards about
+                  example: French Revolution
+                count:
+                  type: integer
+                  default: 10
+                  minimum: 1
+                  maximum: 50
+                  description: Number of cards to generate
+                difficulty:
+                  type: string
+                  enum: [beginner, intermediate, advanced]
+                  default: intermediate
+      responses:
+        '200':
+          description: Generated flashcards
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneratedCardsResponse'
+
+  /api/public/decks:
+    get:
+      operationId: browsePublicDecks
+      summary: Browse public decks
+      description: Search and browse community-shared flashcard decks
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search term
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Public decks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicDecksResponse'
+
+  /api/public/decks/{deckId}/clone:
+    post:
+      operationId: cloneDeck
+      summary: Import a public deck to your library
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Deck cloned to user's library
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeckResponse'
+
+components:
+  schemas:
+    Deck:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        cardCount:
+          type: integer
+        masteredCount:
+          type: integer
+        learningCount:
+          type: integer
+        newCount:
+          type: integer
+        dueCount:
+          type: integer
+        isPublic:
+          type: boolean
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    Card:
+      type: object
+      properties:
+        id:
+          type: string
+        front:
+          type: string
+        back:
+          type: string
+        cardType:
+          type: string
+          enum: [flashcard, multiple_choice]
+        options:
+          type: array
+          items:
+            type: string
+        state:
+          type: string
+          enum: [new, learning, review, relearning]
+
+    DeckListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deck'
+
+    DeckResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/Deck'
+
+    DeckWithCardsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          allOf:
+            - $ref: '#/components/schemas/Deck'
+            - type: object
+              properties:
+                cards:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Card'
+
+    DueCardsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            cards:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/Card'
+                  - type: object
+                    properties:
+                      schedule:
+                        type: object
+                        properties:
+                          again:
+                            type: object
+                            properties:
+                              interval:
+                                type: string
+                          hard:
+                            type: object
+                            properties:
+                              interval:
+                                type: string
+                          good:
+                            type: object
+                            properties:
+                              interval:
+                                type: string
+                          easy:
+                            type: object
+                            properties:
+                              interval:
+                                type: string
+            count:
+              type: integer
+
+    ReviewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            nextDue:
+              type: string
+              format: date-time
+            interval:
+              type: string
+              description: Human-readable interval (e.g., "2 days")
+
+    StatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            reviewedToday:
+              type: integer
+            dueToday:
+              type: integer
+            dueTomorrow:
+              type: integer
+            streak:
+              type: integer
+            totalCards:
+              type: integer
+            totalMastered:
+              type: integer
+
+    GeneratedCardsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            cards:
+              type: array
+              items:
+                type: object
+                properties:
+                  front:
+                    type: string
+                  back:
+                    type: string
+
+    PublicDecksResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            decks:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/Deck'
+                  - type: object
+                    properties:
+                      authorName:
+                        type: string
+                      averageRating:
+                        type: number
+                      downloadCount:
+                        type: integer
+            total:
+              type: integer
+            hasMore:
+              type: boolean

@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Sage",
+    "slug": "sage",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "sage",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sage.flashcards"
+    },
+    "android": {
+      "package": "com.sage.flashcards"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./src/assets/sage-logo.png",
+      "name": "Sage"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font"
+    ]
+  }
+}
