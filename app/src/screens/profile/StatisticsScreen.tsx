@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -52,6 +52,7 @@ export function StatisticsScreen() {
   const [calendarOffset, setCalendarOffset] = useState(0); // Offset in weeks (0 = current, negative = past)
   const [statsTimePeriod, setStatsTimePeriod] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [showMasteryInfo, setShowMasteryInfo] = useState(false);
+  const calendarScrollRef = useRef<ScrollView>(null);
 
   // Load study history on mount
   useEffect(() => {
@@ -64,6 +65,13 @@ export function StatisticsScreen() {
     loadData();
   }, []);
 
+  // Scroll calendar to show current date (right side) on mount
+  useEffect(() => {
+    setTimeout(() => {
+      calendarScrollRef.current?.scrollToEnd({ animated: false });
+    }, 100);
+  }, []);
+
   // Responsive values
   const containerMaxWidth = isDesktop ? 800 : isTablet ? 600 : '100%';
   const contentPadding = isDesktop ? spacing[8] : isTablet ? spacing[6] : spacing[4];
@@ -74,19 +82,24 @@ export function StatisticsScreen() {
   const totalNew = decks.reduce((sum, d) => sum + d.newCount, 0);
   const masteryPercentage = totalCards > 0 ? Math.round((totalMastered / totalCards) * 100) : 0;
 
-  // User signup date
-  const signupDate = useMemo(() => {
+  // User signup date as YYYY-MM-DD string for reliable comparison
+  const signupDateKey = useMemo(() => {
     if (user?.createdAt) {
       const date = new Date(user.createdAt);
-      date.setHours(0, 0, 0, 0);
-      return date;
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
     return null;
   }, [user?.createdAt]);
 
-  // Helper to format date as YYYY-MM-DD for record lookup
+  // Helper to format date as YYYY-MM-DD in local timezone
   const getDateKey = (date: Date): string => {
-    return date.toISOString().split('T')[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   // Generate calendar data (52 weeks with offset support)
@@ -113,13 +126,13 @@ export function StatisticsScreen() {
         date.setDate(startDate.getDate() + (week * 7) + day);
         const isFuture = date > today;
 
+        // Get date key for lookups
+        const dateKey = getDateKey(date);
+
         // Check if this is the signup day
-        const isSignupDay = signupDate
-          ? date.getTime() === signupDate.getTime()
-          : false;
+        const isSignupDay = signupDateKey === dateKey;
 
         // Get real data from study history
-        const dateKey = getDateKey(date);
         const record = dailyRecords[dateKey] || null;
         const cardsStudied = isFuture ? 0 : (record?.cardsStudied || 0);
         const intensity = isFuture ? 0 : cardsStudied === 0 ? 0 : Math.min(4, Math.ceil(cardsStudied / 10));
@@ -136,7 +149,7 @@ export function StatisticsScreen() {
       data.push(weekData);
     }
     return data;
-  }, [signupDate, studyHistory, calendarOffset]);
+  }, [signupDateKey, studyHistory, calendarOffset]);
 
   // Get date range for calendar header
   const calendarDateRange = useMemo(() => {
@@ -376,6 +389,7 @@ export function StatisticsScreen() {
 
           {/* Month Labels - scrollable with calendar */}
           <ScrollView
+            ref={calendarScrollRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.calendarScrollContent}
@@ -421,13 +435,15 @@ export function StatisticsScreen() {
                             styles.calendarDay,
                             { backgroundColor: day.isFuture ? 'transparent' : getIntensityColor(day.intensity) },
                             day.isFuture && { borderWidth: 1, borderColor: border, borderStyle: 'dashed' },
-                            day.isSignupDay && { borderWidth: 2, borderColor: accent.blue },
+                            day.isSignupDay && {
+                              backgroundColor: accent.orange,
+                            },
                           ]}
                           onPress={() => !day.isFuture && setSelectedDay(day)}
                           disabled={day.isFuture}
                         >
                           {day.isSignupDay && (
-                            <Ionicons name="star" size={8} color={accent.blue} style={styles.signupStar} />
+                            <Ionicons name="star" size={7} color="#FFFACD" />
                           )}
                         </Pressable>
                       ))}
@@ -927,9 +943,6 @@ const styles = StyleSheet.create({
         transition: 'transform 100ms ease',
       } as any,
     }),
-  },
-  signupStar: {
-    position: 'absolute',
   },
   calendarLegendContainer: {
     flexDirection: 'row',

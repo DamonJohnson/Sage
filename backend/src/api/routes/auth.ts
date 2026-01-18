@@ -8,6 +8,13 @@ import { generateToken, requireAuth } from '../../middleware/auth.js';
 
 const router = Router();
 
+// Helper to convert SQLite datetime to ISO 8601 format
+const toISODate = (sqliteDate: string | null): string => {
+  if (!sqliteDate) return new Date().toISOString();
+  // SQLite format: '2026-01-01 00:00:00' -> ISO: '2026-01-01T00:00:00.000Z'
+  return sqliteDate.replace(' ', 'T') + '.000Z';
+};
+
 // Validation schemas
 const googleAuthSchema = z.object({
   idToken: z.string().optional(),
@@ -200,7 +207,7 @@ router.post('/google', async (req: Request, res: Response) => {
           streakCurrent: user!.streak_current,
           streakLongest: user!.streak_longest,
           settings: JSON.parse(user!.settings || '{}'),
-          createdAt: user!.created_at,
+          createdAt: toISODate(user!.created_at),
         },
       },
     });
@@ -306,7 +313,7 @@ router.post('/apple', async (req: Request, res: Response) => {
           streakCurrent: user!.streak_current,
           streakLongest: user!.streak_longest,
           settings: JSON.parse(user!.settings || '{}'),
-          createdAt: user!.created_at,
+          createdAt: toISODate(user!.created_at),
         },
       },
     });
@@ -383,7 +390,7 @@ router.post('/register', async (req: Request, res: Response) => {
           streakCurrent: user.streak_current,
           streakLongest: user.streak_longest,
           settings: JSON.parse(user.settings || '{}'),
-          createdAt: user.created_at,
+          createdAt: toISODate(user.created_at),
         },
       },
     });
@@ -455,7 +462,7 @@ router.post('/login', async (req: Request, res: Response) => {
           streakCurrent: user.streak_current,
           streakLongest: user.streak_longest,
           settings: JSON.parse(user.settings || '{}'),
-          createdAt: user.created_at,
+          createdAt: toISODate(user.created_at),
         },
       },
     });
@@ -517,7 +524,7 @@ router.get('/me', requireAuth, (req: Request, res: Response) => {
         streakLongest: user.streak_longest,
         lastStudyDate: user.last_study_date,
         settings: JSON.parse(user.settings || '{}'),
-        createdAt: user.created_at,
+        createdAt: toISODate(user.created_at),
         stats: {
           deckCount: stats.deckCount || 0,
           totalCards: stats.totalCards || 0,
@@ -658,10 +665,8 @@ if (config.nodeEnv === 'development') {
       // Find or create user
       let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
 
-      // Demo start date 30 days ago for testing
-      const demoStartDate = new Date();
-      demoStartDate.setDate(demoStartDate.getDate() - 30);
-      const demoCreatedAt = demoStartDate.toISOString().replace('T', ' ').split('.')[0];
+      // Demo account start date: Jan 1, 2026
+      const demoCreatedAt = '2026-01-01 00:00:00';
 
       if (!user) {
         const userId = uuidv4();
@@ -672,15 +677,9 @@ if (config.nodeEnv === 'development') {
 
         user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as UserRow;
       } else if (email === 'demo@sage.app') {
-        // Update existing demo account to have a past created_at for testing
-        const userCreatedAt = new Date(user.created_at);
-        const twoDaysAgo = new Date();
-        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-
-        if (userCreatedAt > twoDaysAgo) {
-          db.prepare(`UPDATE users SET created_at = ? WHERE id = ?`).run(demoCreatedAt, user.id);
-          user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as UserRow;
-        }
+        // Always update demo account to Jan 1, 2026 for testing
+        db.prepare(`UPDATE users SET created_at = ? WHERE id = ?`).run(demoCreatedAt, user.id);
+        user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as UserRow;
       }
 
       const token = generateToken({ id: user!.id, email: user!.email });
@@ -696,7 +695,7 @@ if (config.nodeEnv === 'development') {
             avatarUrl: user!.avatar_url,
             streakCurrent: user!.streak_current,
             streakLongest: user!.streak_longest,
-            createdAt: user!.created_at,
+            createdAt: toISODate(user!.created_at),
           },
         },
       });
