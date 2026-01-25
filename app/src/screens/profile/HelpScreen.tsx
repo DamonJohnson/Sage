@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
+import { Footer } from '@/components/layout';
 import { spacing, typography, borderRadius } from '@/theme';
 
 interface FAQItem {
@@ -230,18 +231,23 @@ export function HelpScreen() {
               Made with care for learners everywhere.
             </Text>
             <View style={styles.appLinks}>
-              <TouchableOpacity onPress={() => Linking.openURL('https://sage.app/privacy')}>
+              <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy' as never)}>
                 <Text style={[styles.appLink, { color: accent.orange }]}>Privacy Policy</Text>
               </TouchableOpacity>
               <Text style={[styles.appLinkDivider, { color: textSecondary }]}>•</Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://sage.app/terms')}>
+              <TouchableOpacity onPress={() => navigation.navigate('TermsOfService' as never)}>
                 <Text style={[styles.appLink, { color: accent.orange }]}>Terms of Service</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        <View style={{ height: spacing[20] }} />
+        {/* Footer */}
+        <View style={{ marginTop: spacing[6] }}>
+          <Footer />
+        </View>
+
+        <View style={{ height: spacing[10] }} />
       </ScrollView>
     </View>
   );

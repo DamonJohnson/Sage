@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { GradientButton, ProgressBar } from '@/components/ui';
+import { EditCardModal, type CardData } from '@/components/cards';
 import { useDeckStore } from '@/store';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
@@ -41,9 +43,14 @@ export function DeckDetailScreen() {
   const { isDesktop, isTablet, isMobile } = useResponsive();
   const { background, surface, surfaceHover, border, textPrimary, textSecondary, accent } = useThemedColors();
 
-  const { getDeck, getCards, updateDeck, deleteDeck, addCard, updateCard, deleteCard } = useDeckStore();
+  const { getDeck, getCards, loadCards, updateDeck, deleteDeck, addCard, updateCard, deleteCard } = useDeckStore();
   const deck = getDeck(deckId);
   const cards = getCards(deckId);
+
+  // Load cards when screen mounts
+  useEffect(() => {
+    loadCards(deckId);
+  }, [deckId]);
 
   // Check if this is a saved/cloned deck from another user
   // Note: Decks in the user's library are always "owned" by them (backend filters by user_id)
@@ -52,6 +59,7 @@ export function DeckDetailScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showAddCardsModal, setShowAddCardsModal] = useState(false);
   const [showEditDeckModal, setShowEditDeckModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -90,6 +98,19 @@ export function DeckDetailScreen() {
   const masteryPercentage = deck.cardCount > 0
     ? Math.round((deck.masteredCount / deck.cardCount) * 100)
     : 0;
+
+  const formatLastStudied = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return date.toLocaleDateString();
+  };
 
   const handleStartStudy = () => {
     if (Platform.OS !== 'web') {
@@ -172,21 +193,26 @@ export function DeckDetailScreen() {
       cardType: card.cardType,
       options: card.options,
     });
-    setCardFront(card.front);
-    setCardBack(card.back);
-    setCardType(card.cardType);
+  };
 
-    // For multiple choice, load options and find the correct answer index
-    if (card.cardType === 'multiple_choice' && card.options) {
-      setCardOptions(card.options.length >= 4 ? card.options : [...card.options, ...Array(4 - card.options.length).fill('')]);
-      const correctIdx = card.options.findIndex(opt => opt === card.back);
-      setCorrectOptionIndex(correctIdx >= 0 ? correctIdx : null);
+  const handleEditCardSave = async (updatedCard: CardData) => {
+    if (!editingCard) return;
+
+    const success = await updateCard(deckId, editingCard.id, {
+      front: updatedCard.front,
+      back: updatedCard.back,
+      cardType: updatedCard.cardType,
+      options: updatedCard.options,
+    });
+
+    if (success) {
+      setEditingCard(null);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     } else {
-      setCardOptions(['', '', '', '']);
-      setCorrectOptionIndex(null);
+      Alert.alert('Error', 'Failed to update card. Please try again.');
     }
-
-    setShowCardModal(true);
   };
 
   const handleSaveCard = async () => {
@@ -353,17 +379,6 @@ export function DeckDetailScreen() {
             <Text style={[styles.deckDescription, { color: textSecondary }]}>{deck.description}</Text>
           )}
 
-          {/* Tags */}
-          {deck.tags.length > 0 && (
-            <View style={styles.tagsRow}>
-              {deck.tags.map((tag) => (
-                <View key={tag} style={[styles.tag, { backgroundColor: accent.orange + '20' }]}>
-                  <Text style={[styles.tagText, { color: accent.orange }]}>{tag}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
           {/* Privacy Toggle - only show for user-created decks (not saved public decks) */}
           {!isClonedDeck && (
             <View style={[styles.privacyToggleRow, { backgroundColor: surface, borderColor: border }]}>
@@ -433,6 +448,16 @@ export function DeckDetailScreen() {
                 <Text style={[styles.statLabel, { color: textSecondary }]}>Due</Text>
               </View>
             </View>
+
+            {/* Last Studied */}
+            <View style={[styles.lastStudiedRow, { borderTopColor: border }]}>
+              <Ionicons name="time-outline" size={16} color={textSecondary} />
+              <Text style={[styles.lastStudiedText, { color: textSecondary }]}>
+                {deck.lastStudied
+                  ? `Last studied ${formatLastStudied(deck.lastStudied)}`
+                  : 'Never studied'}
+              </Text>
+            </View>
           </View>
 
           {/* Study Button */}
@@ -451,8 +476,12 @@ export function DeckDetailScreen() {
             <Text style={[styles.cardsSectionTitle, { color: textPrimary }]}>
               Cards ({deck.cardCount})
             </Text>
-            <TouchableOpacity onPress={handleAddCard}>
-              <Ionicons name="add-circle-outline" size={24} color={accent.orange} />
+            <TouchableOpacity
+              style={[styles.addCardsButton, { backgroundColor: accent.orange }]}
+              onPress={() => setShowAddCardsModal(true)}
+            >
+              <Ionicons name="add" size={18} color="#fff" />
+              <Text style={styles.addCardsButtonText}>Add Cards</Text>
             </TouchableOpacity>
           </View>
 
@@ -479,14 +508,15 @@ export function DeckDetailScreen() {
             <View style={styles.emptyCards}>
               <Ionicons name="documents-outline" size={48} color={textSecondary} />
               <Text style={[styles.emptyCardsText, { color: textSecondary }]}>
-                {searchQuery ? 'No cards match your search' : 'No cards in this deck'}
+                {searchQuery ? 'No cards match your search' : 'No cards in this deck yet'}
               </Text>
               {!searchQuery && (
                 <TouchableOpacity
-                  style={[styles.addFirstCard, { backgroundColor: accent.orange }]}
-                  onPress={handleAddCard}
+                  style={[styles.emptyCardsButton, { backgroundColor: accent.orange }]}
+                  onPress={() => setShowAddCardsModal(true)}
                 >
-                  <Text style={styles.addFirstCardText}>Add Your First Card</Text>
+                  <Ionicons name="add" size={18} color="#fff" />
+                  <Text style={styles.emptyCardsButtonText}>Add Your First Cards</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -668,7 +698,7 @@ export function DeckDetailScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Card Edit/Add Modal */}
+      {/* Add Card Modal */}
       <Modal
         visible={showCardModal}
         transparent
@@ -681,80 +711,59 @@ export function DeckDetailScreen() {
         >
           <ScrollView style={[styles.modalContent, { backgroundColor: surface }]} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: textPrimary }]}>
-                {editingCard ? 'Edit Card' : 'Add Card'}
-              </Text>
+              <Text style={[styles.modalTitle, { color: textPrimary }]}>Add Card</Text>
               <TouchableOpacity onPress={() => setShowCardModal(false)}>
                 <Ionicons name="close" size={24} color={textSecondary} />
               </TouchableOpacity>
             </View>
 
             {/* Card Type Toggle */}
-            {(() => {
-              // Use editingCard's type as source of truth when editing
-              const effectiveCardType = editingCard?.cardType ?? cardType;
-              const isFlashcard = effectiveCardType === 'flashcard';
-              const isMultiChoice = effectiveCardType === 'multiple_choice';
-
-              return (
-                <View style={styles.cardTypeToggle}>
-                  <TouchableOpacity
-                    style={[
-                      styles.cardTypeButton,
-                      { borderColor: border },
-                      isFlashcard && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
-                    ]}
-                    onPress={() => {
-                      setCardType('flashcard');
-                      if (editingCard) {
-                        setEditingCard({ ...editingCard, cardType: 'flashcard' });
-                      }
-                    }}
-                  >
-                    <Ionicons
-                      name="copy-outline"
-                      size={16}
-                      color={isFlashcard ? accent.orange : textSecondary}
-                    />
-                    <Text
-                      style={[
-                        styles.cardTypeText,
-                        { color: isFlashcard ? accent.orange : textSecondary },
-                      ]}
-                    >
-                      Flashcard
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.cardTypeButton,
-                      { borderColor: border },
-                      isMultiChoice && { backgroundColor: accent.purple + '20', borderColor: accent.purple },
-                    ]}
-                    onPress={() => {
-                      setCardType('multiple_choice');
-                      if (editingCard) {
-                        setEditingCard({ ...editingCard, cardType: 'multiple_choice' });
-                      }
-                    }}
-                  >
-                    <Ionicons
-                      name="list-outline"
-                      size={16}
-                      color={isMultiChoice ? accent.purple : textSecondary}
-                    />
-                    <Text
-                      style={[
-                        styles.cardTypeText,
-                        { color: isMultiChoice ? accent.purple : textSecondary },
-                      ]}
-                    >
-                      Multiple Choice
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })()}
+            <View style={styles.cardTypeToggle}>
+              <TouchableOpacity
+                style={[
+                  styles.cardTypeButton,
+                  { borderColor: border },
+                  cardType === 'flashcard' && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+                ]}
+                onPress={() => setCardType('flashcard')}
+              >
+                <Ionicons
+                  name="copy-outline"
+                  size={16}
+                  color={cardType === 'flashcard' ? accent.orange : textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.cardTypeText,
+                    { color: cardType === 'flashcard' ? accent.orange : textSecondary },
+                  ]}
+                >
+                  Flashcard
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.cardTypeButton,
+                  { borderColor: border },
+                  cardType === 'multiple_choice' && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+                ]}
+                onPress={() => setCardType('multiple_choice')}
+              >
+                <Ionicons
+                  name="list-outline"
+                  size={16}
+                  color={cardType === 'multiple_choice' ? accent.orange : textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.cardTypeText,
+                    { color: cardType === 'multiple_choice' ? accent.orange : textSecondary },
+                  ]}
+                >
+                  Multiple Choice
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <Text style={[styles.inputLabel, { color: textSecondary }]}>Front (Question)</Text>
             <TextInput
@@ -767,102 +776,189 @@ export function DeckDetailScreen() {
               numberOfLines={3}
             />
 
-            {(() => {
-              // Use editingCard's type as source of truth when editing
-              const effectiveCardType = editingCard?.cardType ?? cardType;
-
-              if (effectiveCardType === 'flashcard') {
-                return (
-                  <>
-                    <Text style={[styles.inputLabel, { color: textSecondary, marginTop: spacing[4] }]}>Back (Answer)</Text>
-                    <TextInput
-                      style={[styles.modalInput, styles.multilineInput, { backgroundColor: background, color: textPrimary, borderColor: border }]}
-                      value={cardBack}
-                      onChangeText={setCardBack}
-                      placeholder="Enter the answer or definition"
-                      placeholderTextColor={textSecondary}
-                      multiline
-                      numberOfLines={3}
-                    />
-                  </>
-                );
-              }
-
-              // Multiple choice
-              return (
-                <>
-                  <Text style={[styles.inputLabel, { color: textSecondary }]}>
-                    Answer Options (min. 2) - Tap to select correct answer
+            {cardType === 'flashcard' ? (
+              <>
+                <Text style={[styles.inputLabel, { color: textSecondary, marginTop: spacing[4] }]}>Back (Answer)</Text>
+                <TextInput
+                  style={[styles.modalInput, styles.multilineInput, { backgroundColor: background, color: textPrimary, borderColor: border }]}
+                  value={cardBack}
+                  onChangeText={setCardBack}
+                  placeholder="Enter the answer or definition"
+                  placeholderTextColor={textSecondary}
+                  multiline
+                  numberOfLines={3}
+                />
+              </>
+            ) : (
+              <>
+                <Text style={[styles.inputLabel, { color: textSecondary }]}>
+                  Answer Options (min. 2) - Tap to select correct answer
+                </Text>
+                {cardOptions.map((option, idx) => {
+                  const isSelected = correctOptionIndex === idx;
+                  const hasText = option.trim().length > 0;
+                  return (
+                    <View key={idx} style={styles.optionRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.optionBadge,
+                          { backgroundColor: isSelected && hasText ? accent.green : surfaceHover },
+                        ]}
+                        onPress={() => hasText && setCorrectOptionIndex(idx)}
+                        disabled={!hasText}
+                      >
+                        {isSelected && hasText ? (
+                          <Ionicons name="checkmark" size={16} color="#fff" />
+                        ) : (
+                          <Text style={[styles.optionBadgeText, { color: textSecondary }]}>
+                            {String.fromCharCode(65 + idx)}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                      <TextInput
+                        style={[
+                          styles.optionInput,
+                          { backgroundColor: background, color: textPrimary, borderColor: border },
+                          isSelected && hasText && { borderColor: accent.green },
+                        ]}
+                        placeholder={`Option ${String.fromCharCode(65 + idx)}`}
+                        placeholderTextColor={textSecondary}
+                        value={option}
+                        onChangeText={(text) => {
+                          const newOptions = [...cardOptions];
+                          newOptions[idx] = text;
+                          setCardOptions(newOptions);
+                        }}
+                      />
+                    </View>
+                  );
+                })}
+                {correctOptionIndex === null && (
+                  <Text style={[styles.optionHint, { color: accent.orange }]}>
+                    Tap the letter badge to mark the correct answer
                   </Text>
-                  {cardOptions.map((option, idx) => {
-                    const isSelected = correctOptionIndex === idx;
-                    const hasText = option.trim().length > 0;
-                    return (
-                      <View key={idx} style={styles.optionRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.optionBadge,
-                            { backgroundColor: isSelected && hasText ? accent.green : surfaceHover },
-                          ]}
-                          onPress={() => hasText && setCorrectOptionIndex(idx)}
-                          disabled={!hasText}
-                        >
-                          {isSelected && hasText ? (
-                            <Ionicons name="checkmark" size={16} color="#fff" />
-                          ) : (
-                            <Text style={[styles.optionBadgeText, { color: textSecondary }]}>
-                              {String.fromCharCode(65 + idx)}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                        <TextInput
-                          style={[
-                            styles.optionInput,
-                            { backgroundColor: background, color: textPrimary, borderColor: border },
-                            isSelected && hasText && { borderColor: accent.green },
-                          ]}
-                          placeholder={`Option ${String.fromCharCode(65 + idx)}`}
-                          placeholderTextColor={textSecondary}
-                          value={option}
-                          onChangeText={(text) => {
-                            const newOptions = [...cardOptions];
-                            newOptions[idx] = text;
-                            setCardOptions(newOptions);
-                          }}
-                        />
-                      </View>
-                    );
-                  })}
-                  {correctOptionIndex === null && (
-                    <Text style={[styles.optionHint, { color: accent.orange }]}>
-                      Tap the letter badge to mark the correct answer
-                    </Text>
-                  )}
-                </>
-              );
-            })()}
+                )}
+              </>
+            )}
 
             <View style={styles.cardModalButtons}>
-              {editingCard && (
-                <TouchableOpacity
-                  style={[styles.deleteCardButton, { borderColor: accent.red }]}
-                  onPress={handleDeleteCard}
-                >
-                  <Ionicons name="trash-outline" size={18} color={accent.red} />
-                  <Text style={[styles.deleteCardButtonText, { color: accent.red }]}>Delete</Text>
-                </TouchableOpacity>
-              )}
               <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: accent.orange, flex: editingCard ? 1 : undefined }]}
+                style={[styles.saveButton, { backgroundColor: accent.orange }]}
                 onPress={handleSaveCard}
               >
-                <Text style={styles.saveButtonText}>{editingCard ? 'Save' : 'Add Card'}</Text>
+                <Text style={styles.saveButtonText}>Add Card</Text>
               </TouchableOpacity>
             </View>
             <View style={{ height: spacing[8] }} />
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Add Cards Modal */}
+      <Modal
+        visible={showAddCardsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddCardsModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAddCardsModal(false)}
+        >
+          <View style={[styles.addCardsModalContent, { backgroundColor: surface }]}>
+            <View style={styles.addCardsModalHeader}>
+              <Text style={[styles.addCardsModalTitle, { color: textPrimary }]}>Add Cards</Text>
+              <TouchableOpacity onPress={() => setShowAddCardsModal(false)}>
+                <Ionicons name="close" size={24} color={textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.addCardsGradientCard}
+              activeOpacity={0.8}
+              onPress={() => {
+                setShowAddCardsModal(false);
+                handleAddCard();
+              }}
+            >
+              <LinearGradient
+                colors={[accent.orange, '#E85D2B']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.addCardsGradient}
+              >
+                <View style={styles.addCardsGradientIconContainer}>
+                  <Ionicons name="create-outline" size={28} color="#fff" />
+                </View>
+                <View style={styles.addCardsGradientContent}>
+                  <Text style={styles.addCardsGradientTitle}>Manual</Text>
+                  <Text style={styles.addCardsGradientDesc}>Create cards one at a time</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.8)" />
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.addCardsGradientCard}
+              activeOpacity={0.8}
+              onPress={() => {
+                setShowAddCardsModal(false);
+                navigation.navigate('CreateAI', { deckId });
+              }}
+            >
+              <LinearGradient
+                colors={['#9333EA', '#7C3AED']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.addCardsGradient}
+              >
+                <View style={styles.addCardsGradientIconContainer}>
+                  <Ionicons name="sparkles" size={28} color="#fff" />
+                </View>
+                <View style={styles.addCardsGradientContent}>
+                  <Text style={styles.addCardsGradientTitle}>AI Generate</Text>
+                  <Text style={styles.addCardsGradientDesc}>Generate cards from a topic</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.8)" />
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.addCardsGradientCard}
+              activeOpacity={0.8}
+              onPress={() => {
+                setShowAddCardsModal(false);
+                navigation.navigate('CreatePDF', { deckId });
+              }}
+            >
+              <LinearGradient
+                colors={['#0891B2', '#0E7490']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.addCardsGradient}
+              >
+                <View style={styles.addCardsGradientIconContainer}>
+                  <Ionicons name="document-text-outline" size={28} color="#fff" />
+                </View>
+                <View style={styles.addCardsGradientContent}>
+                  <Text style={styles.addCardsGradientTitle}>From PDF</Text>
+                  <Text style={styles.addCardsGradientDesc}>Extract cards from a document</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.8)" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Card Modal */}
+      <EditCardModal
+        visible={editingCard !== null}
+        card={editingCard}
+        onClose={() => setEditingCard(null)}
+        onSave={handleEditCardSave}
+      />
     </View>
   );
 }
@@ -985,6 +1081,17 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.xs,
     marginTop: spacing[1],
   },
+  lastStudiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing[4],
+    paddingTop: spacing[4],
+    borderTopWidth: 1,
+    gap: spacing[2],
+  },
+  lastStudiedText: {
+    fontSize: typography.sizes.sm,
+  },
   cardsSection: {
     paddingHorizontal: spacing[4],
   },
@@ -997,6 +1104,67 @@ const styles = StyleSheet.create({
   cardsSectionTitle: {
     fontSize: typography.sizes.lg,
     fontWeight: typography.fontWeight.semibold,
+  },
+  addCardsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingVertical: spacing[1.5],
+    paddingHorizontal: spacing[3],
+    borderRadius: borderRadius.lg,
+  },
+  addCardsButtonText: {
+    color: '#fff',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  addCardsModalContent: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+  },
+  addCardsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[4],
+  },
+  addCardsModalTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  addCardsGradientCard: {
+    marginBottom: spacing[3],
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  addCardsGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  addCardsGradientIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing[3],
+  },
+  addCardsGradientContent: {
+    flex: 1,
+  },
+  addCardsGradientTitle: {
+    fontSize: typography.sizes.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: '#fff',
+    marginBottom: 2,
+  },
+  addCardsGradientDesc: {
+    fontSize: typography.sizes.sm,
+    color: 'rgba(255,255,255,0.8)',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -1051,6 +1219,20 @@ const styles = StyleSheet.create({
   emptyCardsText: {
     fontSize: typography.sizes.base,
     marginTop: spacing[3],
+    marginBottom: spacing[4],
+  },
+  emptyCardsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[5],
+    borderRadius: borderRadius.lg,
+  },
+  emptyCardsButtonText: {
+    color: '#fff',
+    fontSize: typography.sizes.base,
+    fontWeight: typography.fontWeight.semibold,
   },
   addFirstCard: {
     marginTop: spacing[4],
@@ -1153,8 +1335,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    height: '92%',
+    borderTopLeftRadius: borderRadius['2xl'],
+    borderTopRightRadius: borderRadius['2xl'],
     padding: spacing[5],
     paddingBottom: spacing[8],
   },

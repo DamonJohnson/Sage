@@ -102,7 +102,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const webButtonStyle = Platform.OS === 'web' ? {
     cursor: 'pointer' as const,
     transition: 'all 150ms ease',
-  } : {};
+  } as any : {};
 
   return (
     <Modal

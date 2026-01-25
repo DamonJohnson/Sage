@@ -36,17 +36,10 @@ interface PreviewCard extends GeneratedCard {
   id: string;
 }
 
-const DIFFICULTY_OPTIONS = [
-  { value: 'basic', label: 'Basic', description: 'Elementary to Middle School level. Simple concepts, basic vocabulary.' },
-  { value: 'intermediate', label: 'Standard', description: 'High School level. Moderate complexity, some technical terms.' },
-  { value: 'advanced', label: 'Advanced', description: 'University level. Complex relationships, technical language.' },
-  { value: 'expert', label: 'Expert', description: 'Graduate/Professional level. Nuanced details, assumes prior knowledge.' },
-];
-
 const GENERATION_PHASES = [
   'Uploading PDF...',
   'Extracting text...',
-  'Generating cards...',
+  'Creating cards...',
   'Polishing results...',
 ];
 
@@ -74,8 +67,6 @@ export function CreatePDFScreen() {
 
   // PDF state
   const [selectedFile, setSelectedFile] = useState<{ name: string; uri: string; webFile?: File } | null>(null);
-  const [cardCount, setCardCount] = useState(10);
-  const [difficulty, setDifficulty] = useState<'basic' | 'intermediate' | 'advanced' | 'expert'>('intermediate');
   const [multipleChoiceRatio, setMultipleChoiceRatio] = useState(0);
   const [isPublic, setIsPublic] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -83,7 +74,6 @@ export function CreatePDFScreen() {
 
   // Custom instructions state
   const [customInstructions, setCustomInstructions] = useState('');
-  const [showDifficultyInfo, setShowDifficultyInfo] = useState(false);
 
   // Preview mode state
   const [showPreview, setShowPreview] = useState(false);
@@ -184,8 +174,6 @@ export function CreatePDFScreen() {
         fileUri: selectedFile.uri,
         fileName: selectedFile.name,
         mimeType: 'application/pdf',
-        count: cardCount,
-        difficulty,
         customInstructions: customInstructions.trim() || undefined,
         multipleChoiceRatio,
       }, selectedFile.webFile);
@@ -201,18 +189,17 @@ export function CreatePDFScreen() {
         if (!deckTitle.trim()) {
           setDeckTitle(selectedFile.name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' '));
         }
-        const difficultyLabel = DIFFICULTY_OPTIONS.find(d => d.value === difficulty)?.label || difficulty;
-        setDeckDescription(`Flashcards from ${selectedFile.name} (${difficultyLabel} level)`);
+        setDeckDescription(`Cards from ${selectedFile.name}`);
         setShowPreview(true);
         if (Platform.OS !== 'web') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       } else {
-        Alert.alert('Error', response.error || 'Failed to generate flashcards from PDF');
+        Alert.alert('Error', response.error || 'Failed to generate cards from PDF');
       }
     } catch (error) {
       console.error('Generation error:', error);
-      Alert.alert('Error', 'Failed to generate flashcards. Please try again.');
+      Alert.alert('Error', 'Failed to generate cards. Please try again.');
     }
 
     setIsGenerating(false);
@@ -654,7 +641,7 @@ export function CreatePDFScreen() {
           <Ionicons name="arrow-back" size={24} color={textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textPrimary }]}>
-          {existingDeck ? `Add to: ${existingDeck.title}` : 'PDF to Flashcards'}
+          {existingDeck ? `Add to: ${existingDeck.title}` : 'Create Deck from PDF'}
         </Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -698,7 +685,7 @@ export function CreatePDFScreen() {
                     Select PDF File
                   </Text>
                   <Text style={[styles.uploadDescription, { color: textSecondary }]}>
-                    We'll extract key concepts and create flashcards
+                    We'll extract key concepts and create cards
                   </Text>
                 </>
               )}
@@ -719,76 +706,19 @@ export function CreatePDFScreen() {
           />
         </View>
 
-        {/* Card Count */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: textSecondary }]}>Number of Cards</Text>
-          <View style={styles.countButtons}>
-            {[5, 10, 20, 50, 100].map((count) => (
-              <TouchableOpacity
-                key={count}
-                style={[
-                  styles.countButton,
-                  { backgroundColor: surface, borderColor: border },
-                  cardCount === count && { backgroundColor: accent.orange, borderColor: accent.orange },
-                ]}
-                onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.selectionAsync();
-                  setCardCount(count);
-                }}
-                disabled={isGenerating}
-              >
-                <Text
-                  style={[
-                    styles.countButtonText,
-                    { color: textSecondary },
-                    cardCount === count && { color: '#FFFFFF' },
-                  ]}
-                >
-                  {count}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        {/* AI Info Card */}
+        <View style={[styles.aiInfoCard, { backgroundColor: accent.purple + '10', borderColor: accent.purple + '30' }]}>
+          <View style={styles.aiInfoHeader}>
+            <Ionicons name="sparkles" size={18} color={accent.purple} />
+            <Text style={[styles.aiInfoTitle, { color: textPrimary }]}>Smart Card Generation</Text>
           </View>
-        </View>
-
-        {/* Difficulty */}
-        <View style={styles.section}>
-          <View style={styles.difficultyHeader}>
-            <Text style={[styles.sectionLabel, { color: textSecondary, marginBottom: 0 }]}>Difficulty Level</Text>
-            <TouchableOpacity
-              style={styles.infoButton}
-              onPress={() => setShowDifficultyInfo(true)}
-            >
-              <Ionicons name="information-circle-outline" size={18} color={textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.difficultyGrid}>
-            {DIFFICULTY_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.difficultyButton,
-                  { backgroundColor: surface, borderColor: border },
-                  difficulty === option.value && { backgroundColor: accent.orange, borderColor: accent.orange },
-                ]}
-                onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.selectionAsync();
-                  setDifficulty(option.value as typeof difficulty);
-                }}
-                disabled={isGenerating}
-              >
-                <Text
-                  style={[
-                    styles.difficultyText,
-                    { color: textSecondary },
-                    difficulty === option.value && { color: '#FFFFFF' },
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Text style={[styles.aiInfoText, { color: textSecondary }]}>
+            Card count and difficulty are automatically optimised based on your PDF content.
+          </Text>
+          <View style={[styles.aiInfoDivider, { backgroundColor: accent.purple + '20' }]} />
+          <Text style={[styles.aiInfoTip, { color: textSecondary }]}>
+            To generate more cards: use "Refine with AI", or add cards to the deck with any of our card creation methods.
+          </Text>
         </View>
 
         {/* Card Type */}
@@ -799,7 +729,7 @@ export function CreatePDFScreen() {
               style={[
                 styles.cardTypeOption,
                 { backgroundColor: surface, borderColor: border },
-                multipleChoiceRatio === 0 && { backgroundColor: accent.orange, borderColor: accent.orange },
+                multipleChoiceRatio === 0 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
               ]}
               onPress={() => {
                 if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -810,13 +740,13 @@ export function CreatePDFScreen() {
               <Ionicons
                 name="documents-outline"
                 size={20}
-                color={multipleChoiceRatio === 0 ? '#fff' : textSecondary}
+                color={multipleChoiceRatio === 0 ? accent.orange : textSecondary}
               />
               <Text
                 style={[
                   styles.cardTypeOptionText,
                   { color: textSecondary },
-                  multipleChoiceRatio === 0 && { color: '#fff' },
+                  multipleChoiceRatio === 0 && { color: accent.orange },
                 ]}
               >
                 Flashcards Only
@@ -826,7 +756,7 @@ export function CreatePDFScreen() {
               style={[
                 styles.cardTypeOption,
                 { backgroundColor: surface, borderColor: border },
-                multipleChoiceRatio === 0.5 && { backgroundColor: accent.orange, borderColor: accent.orange },
+                multipleChoiceRatio === 0.5 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
               ]}
               onPress={() => {
                 if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -837,13 +767,13 @@ export function CreatePDFScreen() {
               <Ionicons
                 name="grid-outline"
                 size={20}
-                color={multipleChoiceRatio === 0.5 ? '#fff' : textSecondary}
+                color={multipleChoiceRatio === 0.5 ? accent.orange : textSecondary}
               />
               <Text
                 style={[
                   styles.cardTypeOptionText,
                   { color: textSecondary },
-                  multipleChoiceRatio === 0.5 && { color: '#fff' },
+                  multipleChoiceRatio === 0.5 && { color: accent.orange },
                 ]}
               >
                 Mixed
@@ -853,7 +783,7 @@ export function CreatePDFScreen() {
               style={[
                 styles.cardTypeOption,
                 { backgroundColor: surface, borderColor: border },
-                multipleChoiceRatio === 1 && { backgroundColor: accent.orange, borderColor: accent.orange },
+                multipleChoiceRatio === 1 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
               ]}
               onPress={() => {
                 if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -864,13 +794,13 @@ export function CreatePDFScreen() {
               <Ionicons
                 name="list-outline"
                 size={20}
-                color={multipleChoiceRatio === 1 ? '#fff' : textSecondary}
+                color={multipleChoiceRatio === 1 ? accent.orange : textSecondary}
               />
               <Text
                 style={[
                   styles.cardTypeOptionText,
                   { color: textSecondary },
-                  multipleChoiceRatio === 1 && { color: '#fff' },
+                  multipleChoiceRatio === 1 && { color: accent.orange },
                 ]}
               >
                 Multiple Choice
@@ -909,7 +839,16 @@ export function CreatePDFScreen() {
 
         {/* Privacy Setting */}
         <View style={styles.section}>
-          <View style={[styles.privacySetting, { backgroundColor: surface }]}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (!isGenerating) {
+                if (Platform.OS !== 'web') Haptics.selectionAsync();
+                setIsPublic(!isPublic);
+              }
+            }}
+            style={[styles.privacySetting, { backgroundColor: surface }]}
+          >
             <View style={styles.privacyInfo}>
               <Ionicons
                 name={isPublic ? 'globe-outline' : 'lock-closed-outline'}
@@ -937,7 +876,7 @@ export function CreatePDFScreen() {
               thumbColor={isPublic ? accent.green : surfaceHover}
               disabled={isGenerating}
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Generate Button */}
@@ -957,7 +896,7 @@ export function CreatePDFScreen() {
             </View>
           ) : (
             <GradientButton
-              title="Generate Flashcards"
+              title="Generate Cards"
               onPress={handleGenerate}
               variant="ai"
               size="lg"
@@ -970,62 +909,6 @@ export function CreatePDFScreen() {
         <View style={{ height: spacing[20] }} />
       </ScrollView>
 
-      {/* Difficulty Info Modal */}
-      <Modal
-        visible={showDifficultyInfo}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDifficultyInfo(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.difficultyInfoModal, { backgroundColor: surface }]}>
-            <View style={styles.editModalHeader}>
-              <Text style={[styles.editModalTitle, { color: textPrimary }]}>Difficulty Levels</Text>
-              <TouchableOpacity onPress={() => setShowDifficultyInfo(false)}>
-                <Ionicons name="close" size={24} color={textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {DIFFICULTY_OPTIONS.map((option, index) => (
-              <View
-                key={option.value}
-                style={[
-                  styles.difficultyInfoItem,
-                  { borderBottomColor: border },
-                  index === DIFFICULTY_OPTIONS.length - 1 && { borderBottomWidth: 0 },
-                ]}
-              >
-                <View style={styles.difficultyInfoHeader}>
-                  <View style={[
-                    styles.difficultyInfoBadge,
-                    { backgroundColor: difficulty === option.value ? accent.orange : surfaceHover },
-                  ]}>
-                    <Text style={[
-                      styles.difficultyInfoBadgeText,
-                      { color: difficulty === option.value ? '#fff' : textPrimary },
-                    ]}>
-                      {option.label}
-                    </Text>
-                  </View>
-                  {difficulty === option.value && (
-                    <Ionicons name="checkmark-circle" size={18} color={accent.orange} />
-                  )}
-                </View>
-                <Text style={[styles.difficultyInfoDescription, { color: textSecondary }]}>
-                  {option.description}
-                </Text>
-              </View>
-            ))}
-
-            <TouchableOpacity
-              style={[styles.difficultyInfoClose, { backgroundColor: accent.orange }]}
-              onPress={() => setShowDifficultyInfo(false)}
-            >
-              <Text style={styles.difficultyInfoCloseText}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -1118,49 +1001,34 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.base,
     borderWidth: 1,
   },
-  // Count buttons
-  countButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  countButton: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    marginHorizontal: spacing[1],
-    borderRadius: borderRadius.xl,
-    alignItems: 'center',
+  // AI info card
+  aiInfoCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing[4],
+    marginBottom: spacing[6],
     borderWidth: 1,
   },
-  countButtonText: {
+  aiInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[2],
+  },
+  aiInfoTitle: {
     fontSize: typography.sizes.base,
     fontWeight: '600',
   },
-  // Difficulty
-  difficultyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing[3],
-  },
-  infoButton: {
-    marginLeft: spacing[2],
-    padding: spacing[1],
-  },
-  difficultyGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -spacing[1],
-  },
-  difficultyButton: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    marginHorizontal: spacing[1],
-    borderRadius: borderRadius.xl,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  difficultyText: {
+  aiInfoText: {
     fontSize: typography.sizes.sm,
-    fontWeight: '500',
+    lineHeight: 20,
+  },
+  aiInfoDivider: {
+    height: 1,
+    marginVertical: spacing[3],
+  },
+  aiInfoTip: {
+    fontSize: typography.sizes.sm,
+    lineHeight: 20,
   },
   // Card type
   cardTypeGrid: {
@@ -1465,49 +1333,6 @@ const styles = StyleSheet.create({
   quickActionText: {
     fontSize: typography.sizes.sm,
     fontWeight: '500',
-  },
-  // Difficulty info modal
-  difficultyInfoModal: {
-    borderRadius: borderRadius.xl,
-    padding: spacing[6],
-    marginHorizontal: spacing[4],
-    maxWidth: 400,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  difficultyInfoItem: {
-    paddingVertical: spacing[4],
-    borderBottomWidth: 1,
-  },
-  difficultyInfoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing[2],
-  },
-  difficultyInfoBadge: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.md,
-  },
-  difficultyInfoBadgeText: {
-    fontSize: typography.sizes.sm,
-    fontWeight: '600',
-  },
-  difficultyInfoDescription: {
-    fontSize: typography.sizes.sm,
-    lineHeight: 20,
-  },
-  difficultyInfoClose: {
-    marginTop: spacing[4],
-    paddingVertical: spacing[3],
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-  },
-  difficultyInfoCloseText: {
-    color: '#fff',
-    fontSize: typography.sizes.base,
-    fontWeight: '600',
   },
   // Discard modal
   discardModal: {

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { DeckCard } from '@/components/deck';
+import { Footer } from '@/components/layout';
 import { useDeckStore } from '@/store';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
@@ -54,7 +55,7 @@ export function LibraryScreen() {
   const webButtonStyle = Platform.OS === 'web' ? {
     cursor: 'pointer' as const,
     transition: 'transform 150ms ease, background-color 150ms ease, border-color 150ms ease',
-  } : {};
+  } as any : {};
 
   // Responsive values
   const containerMaxWidth = isDesktop ? 1200 : isTablet ? 900 : '100%';
@@ -71,8 +72,7 @@ export function LibraryScreen() {
       result = result.filter(
         (d) =>
           d.title.toLowerCase().includes(query) ||
-          d.description.toLowerCase().includes(query) ||
-          d.tags.some((t) => t.toLowerCase().includes(query))
+          d.description.toLowerCase().includes(query)
       );
     }
 
@@ -362,8 +362,12 @@ export function LibraryScreen() {
         )}
       </View>
 
-      {/* Bottom spacing */}
-      <View style={{ height: spacing[20] }} />
+      {/* Footer */}
+      <View style={{ marginTop: spacing[6] }}>
+        <Footer />
+      </View>
+
+      <View style={{ height: spacing[10] }} />
     </ScrollView>
   );
 }

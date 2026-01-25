@@ -209,7 +209,7 @@ export function LandingScreen({ onSignUp, onSignIn }: LandingScreenProps) {
   const webButtonStyle = Platform.OS === 'web' ? {
     cursor: 'pointer' as const,
     transition: 'transform 200ms ease, box-shadow 200ms ease',
-  } : {};
+  } as any : {};
 
   return (
     <ScrollView
@@ -288,7 +288,7 @@ export function LandingScreen({ onSignUp, onSignIn }: LandingScreenProps) {
                 onPress={handleSignUp}
                 activeOpacity={0.9}
               >
-                <Text style={styles.primaryCTAText}>Get Started Free</Text>
+                <Text style={styles.primaryCTAText}>Get Started for Free</Text>
                 <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
               </TouchableOpacity>
 
@@ -367,7 +367,7 @@ export function LandingScreen({ onSignUp, onSignIn }: LandingScreenProps) {
 
                 {/* Main flippable card sitting on top of deck */}
                 <TouchableOpacity
-                  style={[styles.activeCardContainer, Platform.OS === 'web' && { cursor: 'pointer' as any }]}
+                  style={[styles.activeCardContainer, Platform.OS === 'web' && { cursor: 'pointer' } as any]}
                   onPress={handleCardFlip}
                   activeOpacity={0.95}
                 >
@@ -630,7 +630,7 @@ export function LandingScreen({ onSignUp, onSignIn }: LandingScreenProps) {
             <Text style={[styles.footerLogoText, { color: textPrimary }]}>Sage</Text>
           </View>
           <Text style={[styles.footerCopyright, { color: textSecondary }]}>
-            © 2025 Sage. All rights reserved.
+            © 2026 Sage. All rights reserved.
           </Text>
         </View>
       </View>

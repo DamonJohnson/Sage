@@ -135,6 +135,10 @@ export function getUserId(req: Request): string {
   if (req.authUser) {
     return req.authUser.id;
   }
+  // In development, allow x-user-id header to specify user
+  if (config.nodeEnv === 'development' && req.headers['x-user-id']) {
+    return req.headers['x-user-id'] as string;
+  }
   // Fallback to demo user for development
   return 'stub-user-1';
 }

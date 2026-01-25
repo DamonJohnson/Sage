@@ -56,9 +56,9 @@ router.get('/', (req: Request, res: Response) => {
         (SELECT COUNT(*) FROM cards c
          LEFT JOIN card_states cs ON c.id = cs.card_id AND cs.user_id = ?
          WHERE c.deck_id = d.id AND cs.id IS NULL) as new_count,
-        (SELECT COUNT(*) FROM card_states cs
-         JOIN cards c ON cs.card_id = c.id
-         WHERE c.deck_id = d.id AND cs.user_id = ? AND cs.due <= datetime('now')) as due_count
+        (SELECT COUNT(*) FROM cards c
+         LEFT JOIN card_states cs ON c.id = cs.card_id AND cs.user_id = ?
+         WHERE c.deck_id = d.id AND (cs.due IS NULL OR cs.due <= datetime('now'))) as due_count
       FROM decks d
       WHERE d.user_id = ?
       ORDER BY d.updated_at DESC

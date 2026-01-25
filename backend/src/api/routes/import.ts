@@ -1,12 +1,26 @@
-import { Router, Request, Response } from 'express';
-import { requireAuth, getUserId } from '../../middleware/auth.js';
+import { Router, Request, Response, NextFunction } from 'express';
+import { requireAuth, optionalAuth, getUserId } from '../../middleware/auth.js';
+import { config } from '../../config.js';
 import multer from 'multer';
+
+// Development auth middleware - allows x-user-id header in dev mode
+function devAuth(req: Request, res: Response, next: NextFunction): void {
+  // In development, allow x-user-id header to bypass auth
+  if (config.nodeEnv === 'development' && req.headers['x-user-id']) {
+    (req as any).authUser = { id: req.headers['x-user-id'] as string, email: 'dev@test.com', name: 'Dev User' };
+    next();
+    return;
+  }
+  // Otherwise use normal auth
+  requireAuth(req, res, next);
+}
 import AdmZip from 'adm-zip';
 import Database from 'better-sqlite3';
 import { v4 as uuid } from 'uuid';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import Anthropic from '@anthropic-ai/sdk';
 
 const router = Router();
 
@@ -18,9 +32,18 @@ const upload = multer({
   },
   fileFilter: (_req, file, cb) => {
     // Accept .apkg files (which are actually ZIP files)
-    if (file.originalname.endsWith('.apkg') || file.mimetype === 'application/zip') {
+    // Check filename extension or common MIME types for zip files
+    const isApkgFile = file.originalname.toLowerCase().endsWith('.apkg');
+    const isZipMime = [
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/octet-stream',
+    ].includes(file.mimetype);
+
+    if (isApkgFile || isZipMime) {
       cb(null, true);
     } else {
+      console.log('Rejected file:', file.originalname, file.mimetype);
       cb(new Error('Only .apkg files are allowed'));
     }
   },
@@ -40,7 +63,7 @@ interface AnkiModel {
  * Import an APKG file (Anki deck package)
  * POST /api/import/apkg
  */
-router.post('/apkg', requireAuth, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/apkg', devAuth, upload.single('file'), async (req: Request, res: Response) => {
   const tempDir = path.join(os.tmpdir(), `apkg-${uuid()}`);
 
   try {
@@ -50,6 +73,8 @@ router.post('/apkg', requireAuth, upload.single('file'), async (req: Request, re
         error: 'No file uploaded',
       });
     }
+
+    console.log('APKG import: Received file', req.file.originalname, 'size:', req.file.size, 'bytes');
 
     // Create temp directory
     fs.mkdirSync(tempDir, { recursive: true });
@@ -167,6 +192,185 @@ router.post('/apkg', requireAuth, upload.single('file'), async (req: Request, re
     res.status(500).json({
       success: false,
       error: 'Failed to parse APKG file',
+    });
+  }
+});
+
+/**
+ * Import flashcards from text/CSV content using AI
+ * POST /api/import/text
+ */
+router.post('/text', devAuth, async (req: Request, res: Response) => {
+  try {
+    const { content } = req.body;
+
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Content is required',
+      });
+    }
+
+    // Try simple CSV/TSV parsing first
+    const lines = content.trim().split('\n').filter(line => line.trim());
+    const simpleCards: Array<{ front: string; back: string }> = [];
+    let isStructuredData = true;
+
+    for (const line of lines) {
+      // Try comma, tab, or pipe as delimiter
+      let parts = line.split('\t');
+      if (parts.length < 2) parts = line.split(',');
+      if (parts.length < 2) parts = line.split('|');
+
+      if (parts.length >= 2) {
+        const front = parts[0].trim();
+        const back = parts.slice(1).join(', ').trim();
+        if (front && back) {
+          simpleCards.push({ front, back });
+        }
+      } else {
+        isStructuredData = false;
+        break;
+      }
+    }
+
+    // If we successfully parsed structured data with at least 2 cards, return it
+    if (isStructuredData && simpleCards.length >= 2) {
+      return res.json({
+        success: true,
+        data: {
+          deckName: 'Imported Cards',
+          cards: simpleCards,
+          method: 'csv',
+        },
+      });
+    }
+
+    // Otherwise, use AI to parse unstructured content
+    const hasValidApiKey = config.anthropic.apiKey && !config.anthropic.apiKey.startsWith('stub-');
+    if (!hasValidApiKey) {
+      // Fallback to simple parsing if no API key
+      if (simpleCards.length > 0) {
+        return res.json({
+          success: true,
+          data: {
+            deckName: 'Imported Cards',
+            cards: simpleCards,
+            method: 'csv-fallback',
+          },
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        error: 'Could not parse content. Please format as CSV (front,back) or tab-separated values.',
+      });
+    }
+
+    const client = new Anthropic({ apiKey: config.anthropic.apiKey });
+
+    const systemPrompt = `You are an expert educator creating flashcards optimized for spaced repetition learning.
+
+## Your Task
+Analyze the provided text content and convert it into high-quality study cards.
+
+## CRITICAL: Accuracy & Content Extraction
+- ONLY create cards for information explicitly present in the content
+- DO NOT make up or infer facts, dates, names, or details
+- If the content is already in Q&A format, preserve it
+- If it's notes or prose, extract key facts and convert to Q&A
+- Focus on the most important, testable information
+
+## Question Style (Front of Card)
+- Ask ONE specific, unambiguous question per card
+- Keep questions under 15 words when possible
+- Use clear question starters: "What", "Why", "How", "Define", "Which"
+- Avoid yes/no questions - they're poor for learning
+
+## Answer Style (Back of Card)
+- Keep answers CONCISE - 1-2 sentences maximum
+- Lead with the key fact or definition
+- Avoid unnecessary elaboration or filler words
+- Use terminology from the original content
+
+## Card Quality Guidelines
+- Each card tests ONE atomic concept
+- Cards should be self-contained and independent
+- Prioritize foundational knowledge over obscure details
+- Create 5-30 cards depending on content density
+
+## Deck Naming
+- Suggest a concise, descriptive deck name based on the content topic
+- 2-5 words, capitalize appropriately
+
+## Output Format
+Return ONLY valid JSON:
+{"deckName": "Suggested Title", "cards": [{"front": "question", "back": "answer"}]}`;
+
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: `Convert this content into flashcards:\n\n${content.substring(0, 50000)}`,
+        },
+      ],
+    });
+
+    const responseContent = message.content[0];
+    if (responseContent.type !== 'text' || !responseContent.text) {
+      return res.status(500).json({
+        success: false,
+        error: 'No response from AI',
+      });
+    }
+
+    // Parse the JSON response
+    let parsed;
+    try {
+      // Try direct parse
+      parsed = JSON.parse(responseContent.text);
+    } catch {
+      // Try extracting from markdown code block
+      const jsonMatch = responseContent.text.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[1].trim());
+      } else {
+        // Try finding JSON object
+        const objectMatch = responseContent.text.match(/\{[\s\S]*\}/);
+        if (objectMatch) {
+          parsed = JSON.parse(objectMatch[0]);
+        } else {
+          throw new Error('Could not parse JSON from response');
+        }
+      }
+    }
+
+    const cards = parsed.cards || [];
+    if (cards.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Could not extract any flashcards from the content',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        deckName: parsed.deckName || 'Imported Cards',
+        cards: cards.map((card: { front: string; back: string }) => ({
+          front: card.front,
+          back: card.back,
+        })),
+        method: 'ai',
+      },
+    });
+  } catch (error) {
+    console.error('Text import error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to import content',
     });
   }
 });

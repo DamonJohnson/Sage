@@ -17,19 +17,18 @@ import * as Haptics from 'expo-haptics';
 
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
-import { spacing, typography, borderRadius, shadows } from '@/theme';
-import { fetchPublicDecks, fetchCategories, type PublicDeckWithAuthor, type PublicDeckCategory } from '@/services';
-
-const CATEGORIES = ['All', 'Education', 'Languages', 'Technology', 'Science', 'History', 'Arts', 'Business'];
+import { spacing, typography, borderRadius } from '@/theme';
+import { fetchPublicDecks, type PublicDeckWithAuthor } from '@/services';
+import { PublicDeckCard } from '@/components/deck';
+import { Footer } from '@/components/layout';
 
 export function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { isDesktop, isTablet, isMobile } = useResponsive();
-  const { background, surface, surfaceHover, border, textPrimary, textSecondary, accent } = useThemedColors();
+  const { background, surface, border, textPrimary, textSecondary, accent } = useThemedColors();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
   const [decks, setDecks] = useState<PublicDeckWithAuthor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -48,7 +47,6 @@ export function DiscoverScreen() {
 
     const response = await fetchPublicDecks({
       search: searchQuery.trim() || undefined,
-      category: selectedCategory !== 'All' ? selectedCategory : undefined,
       page: currentPage,
       limit: 12,
     });
@@ -65,11 +63,11 @@ export function DiscoverScreen() {
 
     setIsLoading(false);
     setIsRefreshing(false);
-  }, [searchQuery, selectedCategory, page]);
+  }, [searchQuery, page]);
 
   useEffect(() => {
     loadDecks(true);
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -97,14 +95,7 @@ export function DiscoverScreen() {
     navigation.navigate('UserProfile', { userId: authorId });
   };
 
-  const handleCategoryPress = (category: string) => {
-    if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
-    }
-    setSelectedCategory(category);
-  };
-
-  const renderDeckCard = ({ item, index }: { item: PublicDeckWithAuthor; index: number }) => {
+  const renderDeckCard = ({ item }: { item: PublicDeckWithAuthor }) => {
     const cardWidth = isDesktop
       ? `${100 / 3}%`
       : isTablet
@@ -113,60 +104,11 @@ export function DiscoverScreen() {
 
     return (
       <View style={{ width: cardWidth, paddingHorizontal: isDesktop || isTablet ? spacing[2] : 0, marginBottom: spacing[4] }}>
-        <TouchableOpacity
-          style={[styles.deckCard, { backgroundColor: surface, borderColor: border }]}
+        <PublicDeckCard
+          deck={item}
           onPress={() => handleDeckPress(item.id)}
-          activeOpacity={0.7}
-        >
-          {/* Category Badge */}
-          {item.category && (
-            <View style={[styles.categoryBadge, { backgroundColor: accent.orange + '20' }]}>
-              <Text style={[styles.categoryBadgeText, { color: accent.orange }]}>{item.category}</Text>
-            </View>
-          )}
-
-          {/* Title & Description */}
-          <Text style={[styles.deckTitle, { color: textPrimary }]} numberOfLines={2}>
-            {item.title}
-          </Text>
-          <Text style={[styles.deckDescription, { color: textSecondary }]} numberOfLines={2}>
-            {item.description}
-          </Text>
-
-          {/* Author */}
-          <TouchableOpacity
-            style={[styles.authorRow, Platform.OS === 'web' && { cursor: 'pointer' } as any]}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleAuthorPress(item.userId);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.authorAvatar, { backgroundColor: accent.orange }]}>
-              <Text style={styles.authorInitial}>{item.authorName?.charAt(0).toUpperCase() || '?'}</Text>
-            </View>
-            <Text style={[styles.authorName, styles.authorNameLink, { color: accent.blue }]}>
-              {item.authorName}
-            </Text>
-            <Ionicons name="chevron-forward" size={12} color={accent.blue} style={{ marginLeft: 2 }} />
-          </TouchableOpacity>
-
-          {/* Stats Row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Ionicons name="documents-outline" size={14} color={textSecondary} />
-              <Text style={[styles.statText, { color: textSecondary }]}>{item.cardCount} cards</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="download-outline" size={14} color={textSecondary} />
-              <Text style={[styles.statText, { color: textSecondary }]}>{formatNumber(item.downloadCount)}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="star" size={14} color={accent.orange} />
-              <Text style={[styles.statText, { color: textSecondary }]}>{item.averageRating.toFixed(1)}</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
+          onAuthorPress={handleAuthorPress}
+        />
       </View>
     );
   };
@@ -178,7 +120,7 @@ export function DiscoverScreen() {
         <Ionicons name="search" size={20} color={textSecondary} />
         <TextInput
           style={[styles.searchInput, { color: textPrimary }]}
-          placeholder="Search public decks..."
+          placeholder="Search by title or description..."
           placeholderTextColor={textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -191,41 +133,11 @@ export function DiscoverScreen() {
         )}
       </View>
 
-      {/* Categories */}
-      <FlatList
-        horizontal
-        data={CATEGORIES}
-        keyExtractor={(item) => item}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoriesContainer}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.categoryChip,
-              { backgroundColor: surface, borderColor: border },
-              selectedCategory === item && { backgroundColor: accent.orange, borderColor: accent.orange },
-            ]}
-            onPress={() => handleCategoryPress(item)}
-          >
-            <Text
-              style={[
-                styles.categoryChipText,
-                { color: textSecondary },
-                selectedCategory === item && { color: '#FFFFFF' },
-              ]}
-            >
-              {item}
-            </Text>
-          </TouchableOpacity>
-        )}
-      />
-
       {/* Results Count */}
       {!isLoading && (
         <Text style={[styles.resultsCount, { color: textSecondary }]}>
           {decks.length} {decks.length === 1 ? 'deck' : 'decks'} found
           {searchQuery && ` for "${searchQuery}"`}
-          {selectedCategory !== 'All' && ` in ${selectedCategory}`}
         </Text>
       )}
     </View>
@@ -237,17 +149,24 @@ export function DiscoverScreen() {
       <Text style={[styles.emptyTitle, { color: textPrimary }]}>No decks found</Text>
       <Text style={[styles.emptySubtitle, { color: textSecondary }]}>
         {searchQuery
-          ? `Try a different search term or category`
-          : `No public decks available in this category`}
+          ? `Try a different search term`
+          : `No public decks available yet`}
       </Text>
     </View>
   );
 
   const renderFooter = () => {
-    if (!hasMore) return null;
     return (
-      <View style={styles.loadingFooter}>
-        <ActivityIndicator size="small" color={accent.orange} />
+      <View>
+        {hasMore && (
+          <View style={styles.loadingFooter}>
+            <ActivityIndicator size="small" color={accent.orange} />
+          </View>
+        )}
+        <View style={{ marginTop: spacing[6] }}>
+          <Footer />
+        </View>
+        <View style={{ height: spacing[10] }} />
       </View>
     );
   };
@@ -315,16 +234,6 @@ export function DiscoverScreen() {
   );
 }
 
-function formatNumber(num: number): string {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
-  }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K';
-  }
-  return num.toString();
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -359,94 +268,12 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
   },
-  categoriesContainer: {
-    paddingBottom: spacing[4],
-    gap: spacing[2],
-  },
-  categoryChip: {
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    marginRight: spacing[2],
-  },
-  categoryChipText: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
   resultsCount: {
     fontSize: typography.sizes.sm,
     marginBottom: spacing[2],
   },
   listContent: {
     paddingBottom: spacing[20],
-  },
-  deckCard: {
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    padding: spacing[4],
-    ...shadows.sm,
-  },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.md,
-    marginBottom: spacing[2],
-  },
-  categoryBadgeText: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.fontWeight.medium,
-  },
-  deckTitle: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing[1],
-  },
-  deckDescription: {
-    fontSize: typography.sizes.sm,
-    lineHeight: 20,
-    marginBottom: spacing[3],
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing[3],
-  },
-  authorAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing[2],
-  },
-  authorInitial: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.fontWeight.semibold,
-    color: '#FFFFFF',
-  },
-  authorName: {
-    fontSize: typography.sizes.sm,
-  },
-  authorNameLink: {
-    textDecorationLine: 'underline',
-    fontWeight: typography.fontWeight.medium,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: spacing[3],
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(128, 128, 128, 0.2)',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-  },
-  statText: {
-    fontSize: typography.sizes.sm,
   },
   emptyState: {
     alignItems: 'center',

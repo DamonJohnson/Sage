@@ -21,11 +21,6 @@ export interface PublicDecksResponse {
   hasMore: boolean;
 }
 
-export interface PublicDeckCategory {
-  category: string;
-  count: number;
-}
-
 export interface DeckRating {
   id: string;
   deckId: string;
@@ -49,22 +44,21 @@ export interface DeckReviewsResponse {
 
 export interface FetchPublicDecksParams {
   search?: string;
-  category?: string;
   page?: number;
   limit?: number;
 }
 
 /**
  * Fetch public decks from the backend
+ * Searches by title and description
  */
 export async function fetchPublicDecks(
   params: FetchPublicDecksParams = {}
 ): Promise<APIResponse<PublicDecksResponse>> {
-  const { search, category, page = 1, limit = 20 } = params;
+  const { search, page = 1, limit = 20 } = params;
 
   const queryParams = new URLSearchParams();
   if (search) queryParams.set('search', search);
-  if (category && category !== 'All') queryParams.set('category', category);
   queryParams.set('page', String(page));
   queryParams.set('limit', String(limit));
 
@@ -128,8 +122,6 @@ export async function clonePublicDeck(
         title: deck.title,
         description: deck.description || '',
         isPublic: Boolean(deck.isPublic),
-        category: deck.category || null,
-        tags: Array.isArray(deck.tags) ? deck.tags : [],
         cardCount: deck.cardCount || 0,
         downloadCount: deck.downloadCount || 0,
         ratingSum: deck.ratingSum || 0,
@@ -154,13 +146,6 @@ export async function clonePublicDeck(
   }
 
   return response as APIResponse<DeckWithStats>;
-}
-
-/**
- * Fetch available categories
- */
-export async function fetchCategories(): Promise<APIResponse<PublicDeckCategory[]>> {
-  return apiRequest<PublicDeckCategory[]>('GET', '/api/public/categories');
 }
 
 /**
@@ -263,8 +248,6 @@ function transformPublicDeck(deck: any): PublicDeckWithAuthor {
     title: deck.title,
     description: deck.description || '',
     isPublic: Boolean(deck.is_public),
-    category: deck.category || null,
-    tags: typeof deck.tags === 'string' ? JSON.parse(deck.tags || '[]') : (deck.tags || []),
     cardCount: deck.card_count || 0,
     downloadCount: deck.download_count || 0,
     ratingSum: deck.rating_sum || 0,

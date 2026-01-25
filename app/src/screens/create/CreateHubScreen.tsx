@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { spacing, typography, borderRadius } from '@/theme';
+import { Footer } from '@/components/layout';
 import { useAuthStore } from '@/store';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
@@ -25,6 +26,7 @@ interface CreateOption {
   icon: keyof typeof Ionicons.glyphMap;
   gradient: readonly [string, string];
   route: string;
+  routeParams?: Record<string, string>;
   isPrimary?: boolean;
 }
 
@@ -69,12 +71,22 @@ export function CreateHubScreen() {
       route: 'CreateImage',
     },
     {
-      id: 'import',
-      title: 'Import',
-      description: 'Import from Anki (APKG), CSV, or text files',
-      icon: 'cloud-download-outline',
+      id: 'import-anki',
+      title: 'Import from Anki',
+      description: 'Import decks from Anki (.apkg files)',
+      icon: 'folder-open-outline',
       gradient: ['#1E40AF', '#3B82F6'] as const,
       route: 'CreateImport',
+      routeParams: { mode: 'anki' },
+    },
+    {
+      id: 'import-text',
+      title: 'Import Text / CSV',
+      description: 'Import from CSV, TSV, or plain text files',
+      icon: 'document-outline',
+      gradient: ['#6366F1', '#818CF8'] as const,
+      route: 'CreateImport',
+      routeParams: { mode: 'text' },
     },
   ];
 
@@ -82,11 +94,15 @@ export function CreateHubScreen() {
   const contentPadding = isDesktop ? spacing[8] : isTablet ? spacing[6] : spacing[4];
   const gridColumns = isDesktop ? 2 : 1;
 
-  const handleOptionPress = (route: string) => {
+  const handleOptionPress = (option: CreateOption) => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    navigation.navigate(route as never);
+    if (option.routeParams) {
+      (navigation as any).navigate(option.route, option.routeParams);
+    } else {
+      (navigation as any).navigate(option.route);
+    }
   };
 
   return (
@@ -122,7 +138,7 @@ export function CreateHubScreen() {
         {CREATE_OPTIONS.map((option) => (
           <TouchableOpacity
             key={option.id}
-            onPress={() => handleOptionPress(option.route)}
+            onPress={() => handleOptionPress(option)}
             activeOpacity={0.8}
             style={[
               styles.optionCard,
@@ -192,8 +208,12 @@ export function CreateHubScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Bottom spacing */}
-      <View style={{ height: spacing[20] }} />
+      {/* Footer */}
+      <View style={{ marginTop: spacing[6] }}>
+        <Footer />
+      </View>
+
+      <View style={{ height: spacing[10] }} />
     </ScrollView>
   );
 }

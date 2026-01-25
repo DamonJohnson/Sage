@@ -27,9 +27,14 @@ export const config = {
     privateKey: process.env.APPLE_PRIVATE_KEY || '',
   },
 
-  // OpenAI
+  // OpenAI (legacy, kept for fallback)
   openai: {
     apiKey: process.env.OPENAI_API_KEY || 'stub-openai-api-key',
+  },
+
+  // Anthropic Claude (primary AI provider)
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY || 'stub-anthropic-api-key',
   },
 
   // CORS

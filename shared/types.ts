@@ -117,8 +117,6 @@ export interface Deck {
   title: string;
   description: string;
   isPublic: boolean;
-  category: string | null;
-  tags: string[];
   cardCount: number;
   downloadCount: number;
   ratingSum: number;
@@ -159,6 +157,7 @@ export interface Card {
   deckId: string;
   front: string;
   back: string;
+  explanation: string | null; // Optional detailed explanation/notes
   frontImage: string | null; // URL of image for front of card
   backImage: string | null; // URL of image for back of card
   cardType: CardType;
@@ -286,8 +285,11 @@ export interface GenerateFromTextRequest {
 export interface GeneratedCard {
   front: string;
   back: string;
+  explanation?: string | null; // Optional detailed explanation
   cardType: CardType;
   options?: string[];
+  frontImage?: string | null; // For labeled diagram cards - include the source image
+  backImage?: string | null; // For cards that show an image in the answer
 }
 
 // --------------------------------------------
@@ -318,25 +320,6 @@ export interface SyncPullResponse {
 // --------------------------------------------
 // Constants
 // --------------------------------------------
-
-export const CATEGORIES = [
-  'Languages',
-  'Science',
-  'Mathematics',
-  'History',
-  'Geography',
-  'Arts',
-  'Technology',
-  'Business',
-  'Medicine',
-  'Law',
-  'Music',
-  'Literature',
-  'Philosophy',
-  'Other',
-] as const;
-
-export type Category = (typeof CATEGORIES)[number];
 
 export const MASTERY_THRESHOLDS = {
   beginner: 0.3,

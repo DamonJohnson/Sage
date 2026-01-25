@@ -11,10 +11,14 @@ import { CreateAIScreen } from '@/screens/create/CreateAIScreen';
 import { CreatePDFScreen } from '@/screens/create/CreatePDFScreen';
 import { CreateImageScreen } from '@/screens/create/CreateImageScreen';
 import { CreateImportScreen } from '@/screens/create/CreateImportScreen';
+import { AddCardsPreviewScreen } from '@/screens/create/AddCardsPreviewScreen';
 import { SettingsScreen } from '@/screens/settings/SettingsScreen';
 import { StatisticsScreen } from '@/screens/profile/StatisticsScreen';
 import { AchievementsScreen } from '@/screens/profile/AchievementsScreen';
 import { HelpScreen } from '@/screens/profile/HelpScreen';
+import { ContactScreen } from '@/screens/profile/ContactScreen';
+import { PrivacyPolicyScreen } from '@/screens/profile/PrivacyPolicyScreen';
+import { TermsOfServiceScreen } from '@/screens/profile/TermsOfServiceScreen';
 import { EditProfileScreen } from '@/screens/profile/EditProfileScreen';
 import { PublicDeckPreviewScreen } from '@/screens/discover/PublicDeckPreviewScreen';
 import { SocialScreen, UserProfileScreen } from '@/screens/social';
@@ -57,10 +61,14 @@ function MainNavigator() {
       <Stack.Screen name="CreatePDF" component={CreatePDFScreen} />
       <Stack.Screen name="CreateImage" component={CreateImageScreen} />
       <Stack.Screen name="CreateImport" component={CreateImportScreen} />
+      <Stack.Screen name="AddCardsPreview" component={AddCardsPreviewScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Statistics" component={StatisticsScreen} />
       <Stack.Screen name="Achievements" component={AchievementsScreen} />
       <Stack.Screen name="Help" component={HelpScreen} />
+      <Stack.Screen name="Contact" component={ContactScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="PublicDeckPreview" component={PublicDeckPreviewScreen} />
       <Stack.Screen name="Social" component={SocialScreen} />

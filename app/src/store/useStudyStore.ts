@@ -3,6 +3,7 @@ import type { Card, CardState, Rating, StudyStats, FSRSState } from '@sage/share
 import { recordRating, recordSessionEnd } from '@/services/studyHistory';
 import { reviewCard as reviewCardAPI, getDueCards as getDueCardsAPI } from '@/services/study';
 import { useAuthStore } from './useAuthStore';
+import { useDeckStore } from './useDeckStore';
 
 interface StudySessionCard {
   card: Card;
@@ -130,67 +131,65 @@ export const useStudyStore = create<StudyState>((set, get) => ({
     if (!currentCard) return;
 
     const isCorrect = rating >= 3;
-    const startTime = Date.now();
+    const cardIndex = currentSession.currentIndex; // Capture the index at time of rating
 
     // Record rating to local persistent storage
     recordRating(rating as 1 | 2 | 3 | 4).catch(console.error);
 
-    // Submit review to backend for FSRS scheduling
-    try {
-      const response = await reviewCardAPI({
-        cardId: currentCard.card.id,
-        rating: rating as 1 | 2 | 3 | 4,
-        reviewTimeMs: 5000, // Approximate time for now
-      });
+    // Update deck's lastStudied timestamp
+    useDeckStore.getState().updateDeckLastStudied(currentSession.deckId);
 
+    // Submit review to backend for FSRS scheduling (fire and forget - don't block UI)
+    reviewCardAPI({
+      cardId: currentCard.card.id,
+      rating: rating as 1 | 2 | 3 | 4,
+      reviewTimeMs: 5000,
+    }).then((response) => {
       if (response.success && response.data) {
-        // Update card state with backend FSRS result
-        const updatedCards = currentSession.cards.map((c, i) =>
-          i === currentSession.currentIndex
-            ? {
-                ...c,
-                state: {
-                  ...c.state,
-                  stability: response.data!.nextState?.stability || c.state.stability,
-                  difficulty: response.data!.nextState?.difficulty || c.state.difficulty,
-                  state: response.data!.nextState?.state || c.state.state,
-                  due: response.data!.nextState?.due || c.state.due,
-                  reps: (c.state.reps || 0) + 1,
-                },
-              }
-            : c
-        );
-
-        set({
-          currentSession: {
-            ...currentSession,
-            cards: updatedCards,
-            reviewed: currentSession.reviewed + 1,
-            correct: currentSession.correct + (isCorrect ? 1 : 0),
-          },
-          stats: {
-            ...get().stats,
-            reviewedToday: get().stats.reviewedToday + 1,
-            dueToday: Math.max(0, get().stats.dueToday - 1),
-          },
+        // Update card state with backend FSRS result using functional update
+        set((state) => {
+          if (!state.currentSession) return state;
+          const updatedCards = state.currentSession.cards.map((c, i) =>
+            i === cardIndex
+              ? {
+                  ...c,
+                  state: {
+                    ...c.state,
+                    stability: response.data!.nextState?.stability || c.state.stability,
+                    difficulty: response.data!.nextState?.difficulty || c.state.difficulty,
+                    state: response.data!.nextState?.state || c.state.state,
+                    due: response.data!.nextState?.due || c.state.due,
+                    reps: (c.state.reps || 0) + 1,
+                  },
+                }
+              : c
+          );
+          return {
+            ...state,
+            currentSession: {
+              ...state.currentSession,
+              cards: updatedCards,
+            },
+          };
         });
       }
-    } catch (error) {
+    }).catch((error) => {
       console.error('Failed to submit review to backend:', error);
-      // Still update local state even if backend fails
-      set({
-        currentSession: {
-          ...currentSession,
-          reviewed: currentSession.reviewed + 1,
-          correct: currentSession.correct + (isCorrect ? 1 : 0),
-        },
-        stats: {
-          ...get().stats,
-          reviewedToday: get().stats.reviewedToday + 1,
-          dueToday: Math.max(0, get().stats.dueToday - 1),
-        },
-      });
-    }
+    });
+
+    // Update local stats immediately (don't wait for API)
+    set((state) => ({
+      currentSession: state.currentSession ? {
+        ...state.currentSession,
+        reviewed: state.currentSession.reviewed + 1,
+        correct: state.currentSession.correct + (isCorrect ? 1 : 0),
+      } : null,
+      stats: {
+        ...state.stats,
+        reviewedToday: state.stats.reviewedToday + 1,
+        dueToday: Math.max(0, state.stats.dueToday - 1),
+      },
+    }));
   },
 
   nextCard: () => {

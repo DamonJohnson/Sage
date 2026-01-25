@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { ProgressBar } from '@/components/ui';
+import { Footer } from '@/components/layout';
 import { useAuthStore, useDeckStore, useStudyStore, useSocialStore } from '@/store';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
@@ -209,7 +210,12 @@ export function ProfileScreen() {
       {/* App Version */}
       <Text style={[styles.version, { color: textSecondary }]}>Sage v1.0.0</Text>
 
-      <View style={{ height: spacing[20] }} />
+      <View style={{ height: spacing[6] }} />
+
+      {/* Footer */}
+      <Footer />
+
+      <View style={{ height: spacing[10] }} />
     </ScrollView>
   );
 }

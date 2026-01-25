@@ -9,7 +9,7 @@ router.use(optionalAuth);
 
 // GET /api/public/decks - Browse public decks
 router.get('/decks', (req: Request, res: Response) => {
-  const { search, category, page = 1, limit = 20 } = req.query;
+  const { search, page = 1, limit = 20 } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
 
   try {
@@ -23,14 +23,9 @@ router.get('/decks', (req: Request, res: Response) => {
     const params: any[] = [];
 
     if (search) {
-      query += ` AND (d.title LIKE ? OR d.description LIKE ? OR d.tags LIKE ?)`;
+      query += ` AND (d.title LIKE ? OR d.description LIKE ?)`;
       const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm);
-    }
-
-    if (category && category !== 'All') {
-      query += ` AND d.category = ?`;
-      params.push(category);
+      params.push(searchTerm, searchTerm);
     }
 
     query += ` ORDER BY d.download_count DESC, d.rating_sum DESC LIMIT ? OFFSET ?`;
@@ -41,8 +36,7 @@ router.get('/decks', (req: Request, res: Response) => {
     const total = db.prepare(`
       SELECT COUNT(*) as count FROM decks WHERE is_public = 1
       ${search ? `AND (title LIKE ? OR description LIKE ?)` : ''}
-      ${category && category !== 'All' ? `AND category = ?` : ''}
-    `).get(...(search ? [`%${search}%`, `%${search}%`] : []), ...(category && category !== 'All' ? [category] : [])) as { count: number };
+    `).get(...(search ? [`%${search}%`, `%${search}%`] : [])) as { count: number };
 
     res.json({
       success: true,
@@ -118,18 +112,16 @@ router.post('/decks/:id/clone', (req: Request, res: Response) => {
     const newDeckId = require('uuid').v4();
     db.prepare(`
       INSERT INTO decks (
-        id, user_id, title, description, is_public, category, tags, card_count,
+        id, user_id, title, description, is_public, card_count,
         original_author_id, original_author_name, original_author_avatar, original_deck_id,
         created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     `).run(
       newDeckId,
       userId,
       sourceDeck.title,
       sourceDeck.description,
-      sourceDeck.category,
-      sourceDeck.tags,
       sourceDeck.card_count,
       sourceDeck.user_id,
       sourceDeck.author_name,
@@ -160,8 +152,6 @@ router.post('/decks/:id/clone', (req: Request, res: Response) => {
       title: newDeck.title,
       description: newDeck.description,
       isPublic: newDeck.is_public === 1,
-      category: newDeck.category,
-      tags: typeof newDeck.tags === 'string' ? JSON.parse(newDeck.tags) : (newDeck.tags || []),
       cardCount: newDeck.card_count || 0,
       downloadCount: newDeck.download_count || 0,
       ratingSum: newDeck.rating_sum || 0,
@@ -181,24 +171,6 @@ router.post('/decks/:id/clone', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error cloning deck:', error);
     res.status(500).json({ success: false, error: 'Failed to clone deck' });
-  }
-});
-
-// GET /api/public/categories - Get list of categories
-router.get('/categories', (_req: Request, res: Response) => {
-  try {
-    const categories = db.prepare(`
-      SELECT DISTINCT category, COUNT(*) as count
-      FROM decks
-      WHERE is_public = 1 AND category IS NOT NULL
-      GROUP BY category
-      ORDER BY count DESC
-    `).all();
-
-    res.json({ success: true, data: categories });
-  } catch (error) {
-    console.error('Error fetching categories:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch categories' });
   }
 });
 

@@ -19,8 +19,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemColorScheme = useColorScheme();
   const { settings, updateSettings } = useAuthStore();
 
-  // Get the theme setting from auth store, default to 'system'
-  const themeSetting: ThemeSetting = (settings?.theme as ThemeSetting) || 'system';
+  // Get the theme setting from auth store, default to 'dark'
+  const themeSetting: ThemeSetting = (settings?.theme as ThemeSetting) || 'dark';
 
   // Calculate actual mode based on setting
   const getActualMode = (): ThemeMode => {

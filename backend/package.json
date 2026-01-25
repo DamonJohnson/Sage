@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "adm-zip": "^0.5.16",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^9.2.2",
@@ -16,11 +17,13 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "helmet": "^7.1.0",
+    "jimp": "^1.6.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.2",
     "openai": "^4.24.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
+    "pdf-parse": "^1.1.1",
     "uuid": "^9.0.1",
     "zod": "^3.22.4"
   },
@@ -35,6 +38,7 @@
     "@types/node": "^20.10.6",
     "@types/passport": "^1.0.16",
     "@types/passport-google-oauth20": "^2.0.14",
+    "@types/pdf-parse": "^1.1.5",
     "@types/uuid": "^9.0.7",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"

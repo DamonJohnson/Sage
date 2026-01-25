@@ -176,7 +176,7 @@ export function SocialScreen() {
   const webButtonStyle = Platform.OS === 'web' ? {
     cursor: 'pointer' as const,
     transition: 'background-color 150ms ease, border-color 150ms ease',
-  } : {};
+  } as any : {};
 
   const containerMaxWidth = isDesktop ? 600 : isTablet ? 500 : '100%';
   const contentPadding = isDesktop ? spacing[8] : isTablet ? spacing[6] : spacing[4];

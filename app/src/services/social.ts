@@ -58,7 +58,7 @@ export async function discoverUsers(
   const queryString = queryParams.toString();
   const url = `/social/discover${queryString ? `?${queryString}` : ''}`;
 
-  return apiRequest<SocialUserProfile[]>(url);
+  return apiRequest<SocialUserProfile[]>('GET', url);
 }
 
 /**
@@ -68,7 +68,7 @@ export async function getFollowers(
   userId?: string
 ): Promise<APIResponse<SocialUserProfile[]>> {
   const url = userId ? `/social/followers?userId=${userId}` : '/social/followers';
-  return apiRequest<SocialUserProfile[]>(url);
+  return apiRequest<SocialUserProfile[]>('GET', url);
 }
 
 /**
@@ -78,32 +78,28 @@ export async function getFollowing(
   userId?: string
 ): Promise<APIResponse<SocialUserProfile[]>> {
   const url = userId ? `/social/following?userId=${userId}` : '/social/following';
-  return apiRequest<SocialUserProfile[]>(url);
+  return apiRequest<SocialUserProfile[]>('GET', url);
 }
 
 /**
  * Follow a user
  */
 export async function followUser(userId: string): Promise<APIResponse<{ message: string }>> {
-  return apiRequest<{ message: string }>(`/social/follow/${userId}`, {
-    method: 'POST',
-  });
+  return apiRequest<{ message: string }>('POST', `/social/follow/${userId}`);
 }
 
 /**
  * Unfollow a user
  */
 export async function unfollowUser(userId: string): Promise<APIResponse<{ message: string }>> {
-  return apiRequest<{ message: string }>(`/social/follow/${userId}`, {
-    method: 'DELETE',
-  });
+  return apiRequest<{ message: string }>('DELETE', `/social/follow/${userId}`);
 }
 
 /**
  * Get a user's profile
  */
 export async function getUserProfile(userId: string): Promise<APIResponse<SocialUserProfile>> {
-  return apiRequest<SocialUserProfile>(`/social/users/${userId}`);
+  return apiRequest<SocialUserProfile>('GET', `/social/users/${userId}`);
 }
 
 /**
@@ -119,7 +115,7 @@ export async function getActivityFeed(
   const queryString = queryParams.toString();
   const url = `/social/activity${queryString ? `?${queryString}` : ''}`;
 
-  return apiRequest<SocialActivity[]>(url);
+  return apiRequest<SocialActivity[]>('GET', url);
 }
 
 /**
@@ -128,8 +124,5 @@ export async function getActivityFeed(
 export async function updateSocialProfile(
   data: { bio?: string; activityPublic?: boolean }
 ): Promise<APIResponse<{ message: string }>> {
-  return apiRequest<{ message: string }>('/social/profile', {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
+  return apiRequest<{ message: string }>('PATCH', '/social/profile', data);
 }

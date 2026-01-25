@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,14 +11,14 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useDeckStore } from '@/store';
-import { importApkgFile } from '@/services';
+import { importApkgFile, importTextContent } from '@/services';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
 import { spacing, typography, borderRadius, shadows } from '@/theme';
@@ -32,23 +32,44 @@ interface ImportedCard {
   selected: boolean;
 }
 
+type CreateImportParams = {
+  mode?: 'anki' | 'text';
+};
+
 export function CreateImportScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<{ CreateImport: CreateImportParams }, 'CreateImport'>>();
   const { isDesktop, isTablet, isMobile } = useResponsive();
   const { background, surface, surfaceHover, border, textPrimary, textSecondary, accent } = useThemedColors();
   const { addDeck, addCards } = useDeckStore();
 
-  const [source, setSource] = useState<ImportSource>(null);
-  const [step, setStep] = useState<ImportStep>('select');
+  // Get mode from route params (anki or text)
+  const initialMode = route.params?.mode;
+
+  const [source, setSource] = useState<ImportSource>(
+    initialMode === 'anki' ? 'apkg' : initialMode === 'text' ? 'csv' : null
+  );
+  const [step, setStep] = useState<ImportStep>(initialMode ? 'input' : 'select');
   const [inputValue, setInputValue] = useState('');
   const [deckTitle, setDeckTitle] = useState('');
+  const [deckDescription, setDeckDescription] = useState('');
   const [importedCards, setImportedCards] = useState<ImportedCard[]>([]);
 
   const containerMaxWidth = isDesktop ? 800 : isTablet ? 600 : '100%';
   const contentPadding = isDesktop ? spacing[8] : isTablet ? spacing[6] : spacing[4];
 
-  const [apkgFile, setApkgFile] = useState<{ uri: string; name: string } | null>(null);
+  const [apkgFile, setApkgFile] = useState<{ uri: string; name: string; file?: File; blob?: Blob } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Show error in both UI and alert
+  const showError = (title: string, message: string) => {
+    console.error(`${title}: ${message}`);
+    setErrorMessage(message);
+    if (Platform.OS !== 'web') {
+      Alert.alert(title, message);
+    }
+  };
 
   const IMPORT_SOURCES = [
     {
@@ -68,7 +89,7 @@ export function CreateImportScreen() {
       icon: 'sparkles-outline' as const,
       gradient: ['#9333EA', '#7C3AED'],
       inputLabel: 'Paste Your Content',
-      inputPlaceholder: 'Paste CSV, text, or any structured data...',
+      inputPlaceholder: 'Paste notes, study material, CSV, or any text - AI will create flashcards from it...',
       isFile: false,
     },
   ];
@@ -92,41 +113,88 @@ export function CreateImportScreen() {
         return;
       }
 
-      const file = result.assets[0];
-      if (!file.name.endsWith('.apkg')) {
-        Alert.alert('Invalid File', 'Please select an .apkg file');
+      const pickedFile = result.assets[0];
+      if (!pickedFile.name.toLowerCase().endsWith('.apkg')) {
+        showError('Invalid File', 'Please select an .apkg file');
         return;
       }
 
-      setApkgFile({ uri: file.uri, name: file.name });
-      setInputValue(file.name);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      console.log('DocumentPicker result:', {
+        name: pickedFile.name,
+        uri: pickedFile.uri,
+        mimeType: (pickedFile as any).mimeType,
+        size: (pickedFile as any).size,
+        hasFile: !!(pickedFile as any).file,
+      });
+
+      if (Platform.OS === 'web') {
+        // On web, try to get the File object directly
+        const webFile = (pickedFile as any).file as File | undefined;
+
+        if (webFile) {
+          console.log('Got File object from DocumentPicker:', webFile.name, webFile.size);
+          setApkgFile({ uri: pickedFile.uri, name: pickedFile.name, file: webFile });
+        } else {
+          // Fallback: fetch the blob from the URI immediately to preserve the data
+          console.log('No File object, fetching from blob URI...');
+          try {
+            const response = await fetch(pickedFile.uri);
+            const blob = await response.blob();
+            console.log('Got blob from URI:', blob.size, blob.type);
+            setApkgFile({ uri: pickedFile.uri, name: pickedFile.name, blob: blob });
+          } catch (fetchError) {
+            console.error('Failed to fetch blob from URI:', fetchError);
+            showError('Error', 'Failed to read file. Please try again.');
+            return;
+          }
+        }
+      } else {
+        setApkgFile({ uri: pickedFile.uri, name: pickedFile.name });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+
+      setInputValue(pickedFile.name);
     } catch (error) {
       console.error('Error picking file:', error);
-      Alert.alert('Error', 'Failed to pick file. Please try again.');
+      showError('Error', 'Failed to pick file. Please try again.');
     }
   };
 
   const handleImport = async () => {
+    // Clear any previous errors
+    setErrorMessage(null);
+
     // Validate input based on source type
     if (source === 'apkg' && !apkgFile) {
-      Alert.alert('Error', 'Please select an APKG file');
+      showError('Error', 'Please select an APKG file');
       return;
     }
     if (!inputValue.trim() && selectedSource?.isFile === false) {
-      Alert.alert('Error', `Please enter the ${selectedSource?.inputLabel.toLowerCase()}`);
+      showError('Error', `Please enter the ${selectedSource?.inputLabel.toLowerCase()}`);
       return;
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
     setStep('processing');
 
     // Handle APKG import via backend
     if (source === 'apkg' && apkgFile) {
+      console.log('Starting APKG import:', apkgFile.name, 'hasFile:', !!apkgFile.file, 'hasBlob:', !!apkgFile.blob);
       try {
-        const response = await importApkgFile(apkgFile.uri);
+        // Pass the file or blob for web uploads
+        const webFileOrBlob = apkgFile.file || (apkgFile.blob ? new File([apkgFile.blob], apkgFile.name, { type: 'application/zip' }) : undefined);
+        console.log('webFileOrBlob:', webFileOrBlob ? `${webFileOrBlob.name} (${webFileOrBlob.size} bytes)` : 'undefined');
+        const response = await importApkgFile(apkgFile.uri, apkgFile.name, webFileOrBlob);
+        console.log('APKG import result:', response);
         if (response.success && response.data) {
           const { deckName, cards } = response.data;
+          if (!cards || cards.length === 0) {
+            showError('Import Failed', 'No cards found in the APKG file');
+            setStep('input');
+            return;
+          }
           setDeckTitle(deckName || 'Imported Deck');
           setImportedCards(cards.map((card: { front: string; back: string }) => ({
             front: card.front,
@@ -135,50 +203,48 @@ export function CreateImportScreen() {
           })));
           setStep('preview');
         } else {
-          Alert.alert('Import Failed', response.error || 'Failed to parse APKG file');
+          showError('Import Failed', response.error || 'Failed to parse APKG file');
           setStep('input');
         }
       } catch (error) {
         console.error('APKG import error:', error);
-        Alert.alert('Error', 'Failed to import APKG file. Please try again.');
+        showError('Error', `Failed to import APKG file: ${error instanceof Error ? error.message : 'Unknown error'}`);
         setStep('input');
       }
       return;
     }
 
-    // Handle CSV import (existing logic)
-    setTimeout(() => {
-      let mockCards: ImportedCard[];
-
-      switch (source) {
-        case 'csv':
-          // AI interprets the content and creates flashcards
-          // For now, try to parse as CSV/tab-separated, but AI would enhance this
-          const lines = inputValue.trim().split('\n');
-          mockCards = lines.map(line => {
-            const [front, back] = line.split(/[,\t]/);
-            return {
-              front: front?.trim() || 'Front',
-              back: back?.trim() || 'Back',
-              selected: true,
-            };
-          }).filter(card => card.front && card.back);
-
-          // If no valid cards found, AI would interpret unstructured data
-          if (mockCards.length === 0) {
-            mockCards = [
-              { front: 'AI-generated question from your content', back: 'AI-generated answer', selected: true },
-            ];
+    // Handle CSV/Text import via backend with AI
+    if (source === 'csv') {
+      try {
+        const response = await importTextContent(inputValue);
+        if (response.success && response.data) {
+          const { deckName, cards } = response.data;
+          // Use user-provided title if available, otherwise use AI-suggested name
+          if (!deckTitle.trim()) {
+            setDeckTitle(deckName || 'Imported Deck');
           }
-          setDeckTitle('Imported Deck');
-          break;
-        default:
-          mockCards = [];
+          // Use user-provided description if available
+          if (!deckDescription.trim()) {
+            setDeckDescription(`Imported from text (${cards.length} cards)`);
+          }
+          setImportedCards(cards.map((card: { front: string; back: string }) => ({
+            front: card.front,
+            back: card.back,
+            selected: true,
+          })));
+          setStep('preview');
+        } else {
+          showError('Import Failed', response.error || 'Failed to parse content');
+          setStep('input');
+        }
+      } catch (error) {
+        console.error('Text import error:', error);
+        showError('Error', 'Failed to import content. Please try again.');
+        setStep('input');
       }
-
-      setImportedCards(mockCards);
-      setStep('preview');
-    }, 2000);
+      return;
+    }
   };
 
   const toggleCard = (index: number) => {
@@ -191,30 +257,32 @@ export function CreateImportScreen() {
   const handleCreateDeck = async () => {
     const selectedCards = importedCards.filter(c => c.selected);
     if (selectedCards.length === 0) {
-      Alert.alert('No Cards Selected', 'Please select at least one card to import.');
+      showError('No Cards Selected', 'Please select at least one card to import.');
       return;
     }
 
     if (!deckTitle.trim()) {
-      Alert.alert('Missing Title', 'Please enter a deck title.');
+      showError('Missing Title', 'Please enter a deck title.');
       return;
     }
 
     const deckId = await addDeck({
       userId: 'stub-user-1',
       title: deckTitle.trim(),
-      description: `Imported from ${selectedSource?.title || 'external source'}`,
+      description: deckDescription.trim() || `Imported from ${selectedSource?.title || 'external source'}`,
       isPublic: false,
-      category: null,
-      tags: ['imported', source || 'external'],
       cardCount: selectedCards.length,
       downloadCount: 0,
       ratingSum: 0,
       ratingCount: 0,
+      originalAuthorId: null,
+      originalAuthorName: null,
+      originalAuthorAvatar: null,
+      originalDeckId: null,
     });
 
     if (!deckId) {
-      Alert.alert('Error', 'Failed to create deck. Please try again.');
+      showError('Error', 'Failed to create deck. Please try again.');
       return;
     }
 
@@ -276,17 +344,20 @@ export function CreateImportScreen() {
 
   const renderInputStep = () => (
     <View style={styles.inputContainer}>
-      <TouchableOpacity
-        style={[styles.backLink, { backgroundColor: surfaceHover }]}
-        onPress={() => {
-          setStep('select');
-          setSource(null);
-          setInputValue('');
-        }}
-      >
-        <Ionicons name="arrow-back" size={18} color={textPrimary} />
-        <Text style={[styles.backLinkText, { color: textPrimary }]}>Back to sources</Text>
-      </TouchableOpacity>
+      {/* Only show "Back to sources" if we didn't come with a direct mode */}
+      {!initialMode && (
+        <TouchableOpacity
+          style={[styles.backLink, { backgroundColor: surfaceHover }]}
+          onPress={() => {
+            setStep('select');
+            setSource(null);
+            setInputValue('');
+          }}
+        >
+          <Ionicons name="arrow-back" size={18} color={textPrimary} />
+          <Text style={[styles.backLinkText, { color: textPrimary }]}>Back to sources</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={[styles.sourceHeader, { backgroundColor: surface }]}>
         <View
@@ -310,6 +381,37 @@ export function CreateImportScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Deck Title and Description for text import */}
+      {source === 'csv' && (
+        <>
+          <View style={styles.inputSection}>
+            <Text style={[styles.inputLabel, { color: textSecondary }]}>
+              Deck Title (optional)
+            </Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: surface, color: textPrimary, borderColor: border }]}
+              placeholder="AI will suggest a title if left blank"
+              placeholderTextColor={textSecondary}
+              value={deckTitle}
+              onChangeText={setDeckTitle}
+            />
+          </View>
+
+          <View style={styles.inputSection}>
+            <Text style={[styles.inputLabel, { color: textSecondary }]}>
+              Description (optional)
+            </Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: surface, color: textPrimary, borderColor: border }]}
+              placeholder="Brief description of the deck"
+              placeholderTextColor={textSecondary}
+              value={deckDescription}
+              onChangeText={setDeckDescription}
+            />
+          </View>
+        </>
+      )}
 
       <View style={styles.inputSection}>
         <Text style={[styles.inputLabel, { color: textSecondary }]}>
@@ -349,22 +451,19 @@ export function CreateImportScreen() {
             value={inputValue}
             onChangeText={setInputValue}
             multiline={source === 'csv'}
-            numberOfLines={source === 'csv' ? 6 : 1}
+            numberOfLines={source === 'csv' ? 8 : 1}
             textAlignVertical={source === 'csv' ? 'top' : 'center'}
           />
         )}
       </View>
 
-      {source === 'csv' && (
-        <View style={[styles.formatHint, { backgroundColor: surfaceHover }]}>
-          <Text style={[styles.formatHintTitle, { color: textPrimary }]}>Format Guide</Text>
-          <Text style={[styles.formatHintText, { color: textSecondary }]}>
-            Each line should contain: front,back{'\n'}
-            Or use tabs: front{'\t'}back{'\n'}
-            Example:{'\n'}
-            What is 2+2?,4{'\n'}
-            Capital of France?,Paris
-          </Text>
+      {errorMessage && (
+        <View style={[styles.errorBanner, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}>
+          <Ionicons name="alert-circle" size={20} color="#EF4444" />
+          <Text style={[styles.errorText, { color: '#DC2626' }]}>{errorMessage}</Text>
+          <TouchableOpacity onPress={() => setErrorMessage(null)}>
+            <Ionicons name="close" size={18} color="#DC2626" />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -416,6 +515,17 @@ export function CreateImportScreen() {
             value={deckTitle}
             onChangeText={setDeckTitle}
             placeholder="Enter deck title"
+            placeholderTextColor={textSecondary}
+          />
+        </View>
+
+        <View style={styles.deckTitleSection}>
+          <Text style={[styles.inputLabel, { color: textSecondary }]}>Description</Text>
+          <TextInput
+            style={[styles.textInput, { backgroundColor: surface, color: textPrimary, borderColor: border }]}
+            value={deckDescription}
+            onChangeText={setDeckDescription}
+            placeholder="Brief description of the deck"
             placeholderTextColor={textSecondary}
           />
         </View>
@@ -497,7 +607,9 @@ export function CreateImportScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: textPrimary }]}>Import Flashcards</Text>
+        <Text style={[styles.headerTitle, { color: textPrimary }]}>
+          {initialMode === 'anki' ? 'Import from Anki' : initialMode === 'text' ? 'Import Text / CSV' : 'Import Flashcards'}
+        </Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -694,6 +806,19 @@ const styles = StyleSheet.create({
   formatHintText: {
     fontSize: typography.sizes.sm,
     lineHeight: 20,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[3],
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: spacing[4],
+    gap: spacing[2],
+  },
+  errorText: {
+    flex: 1,
+    fontSize: typography.sizes.sm,
   },
   importButton: {
     flexDirection: 'row',

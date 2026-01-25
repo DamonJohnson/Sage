@@ -42,10 +42,16 @@ export {
   generateFromTopic,
   generateFromText,
   generateMockCards,
+  explainConcept,
+  generateFromConcept,
   type GeneratedCard,
   type GenerateFromTopicParams,
   type GenerateFromTextParams,
   type GenerateCardsResponse,
+  type ExplainConceptParams,
+  type ExplainConceptResponse,
+  type GenerateFromConceptParams,
+  type GenerateFromConceptResponse,
 } from './ai';
 
 // Study / FSRS
@@ -108,6 +114,7 @@ export {
   updateCardAPI,
   deleteCardAPI,
   importApkgFile,
+  importTextContent,
 } from './decks';
 
 // Public Decks (Discover)
@@ -115,14 +122,12 @@ export {
   fetchPublicDecks,
   fetchPublicDeck,
   clonePublicDeck,
-  fetchCategories,
   submitDeckRating,
   fetchDeckReviews,
   fetchMyRating,
   deleteDeckRating,
   type PublicDeckWithAuthor,
   type PublicDecksResponse,
-  type PublicDeckCategory,
   type FetchPublicDecksParams,
   type DeckRating,
   type DeckReviewsResponse,

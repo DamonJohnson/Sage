@@ -36,6 +36,7 @@ interface DeckState {
   addCards: (deckId: string, cards: Array<Omit<Card, 'id' | 'createdAt' | 'updatedAt' | 'position' | 'deckId'>>) => Promise<boolean>;
   updateCard: (deckId: string, cardId: string, updates: Partial<Card>) => Promise<boolean>;
   deleteCard: (deckId: string, cardId: string) => Promise<boolean>;
+  updateDeckLastStudied: (deckId: string) => void;
   clearError: () => void;
 }
 
@@ -115,8 +116,6 @@ export const useDeckStore = create<DeckState>()(
           title: deckData.title,
           description: deckData.description,
           isPublic: deckData.isPublic,
-          category: deckData.category || undefined,
-          tags: deckData.tags,
         });
 
         if (response.success && response.data) {
@@ -141,8 +140,6 @@ export const useDeckStore = create<DeckState>()(
           title: updates.title,
           description: updates.description,
           isPublic: updates.isPublic,
-          category: updates.category || undefined,
-          tags: updates.tags,
         });
 
         if (response.success && response.data) {
@@ -182,8 +179,6 @@ export const useDeckStore = create<DeckState>()(
           title: sourceDeck.title,
           description: sourceDeck.description,
           isPublic: false, // Cloned decks are private
-          category: sourceDeck.category || undefined,
-          tags: [...sourceDeck.tags],
         });
 
         if (!deckResponse.success || !deckResponse.data) {
@@ -264,6 +259,7 @@ export const useDeckStore = create<DeckState>()(
           backImage: card.backImage,
           cardType: card.cardType,
           options: card.options,
+          explanation: card.explanation,
         }));
 
         const response = await addCardsAPI(deckId, cardsToAdd);
@@ -335,6 +331,16 @@ export const useDeckStore = create<DeckState>()(
 
         set({ error: response.error || 'Failed to delete card' });
         return false;
+      },
+
+      updateDeckLastStudied: (deckId) => {
+        set((state) => ({
+          decks: state.decks.map((deck) =>
+            deck.id === deckId
+              ? { ...deck, lastStudied: new Date().toISOString() }
+              : deck
+          ),
+        }));
       },
 
       clearError: () => set({ error: null }),

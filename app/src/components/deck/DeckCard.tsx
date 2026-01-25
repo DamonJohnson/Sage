@@ -40,9 +40,9 @@ export function DeckCard({ deck, onPress, onAuthorPress, showPrivacyToggle = tru
   } : {};
 
   const webStyle = Platform.OS === 'web' ? {
-    cursor: 'pointer' as const,
+    cursor: 'pointer',
     transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
-  } : {};
+  } as any : {};
 
   const masteryPercentage = deck.cardCount > 0
     ? Math.round((deck.masteredCount / deck.cardCount) * 100)
@@ -134,20 +134,20 @@ export function DeckCard({ deck, onPress, onAuthorPress, showPrivacyToggle = tru
 
       {/* Original Author (for cloned decks) */}
       {isClonedDeck && (
-        <TouchableOpacity
-          style={[
-            styles.authorRow,
-            Platform.OS === 'web' && { cursor: 'pointer' } as any,
-          ]}
-          onPress={handleAuthorPress}
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-          {...authorWebProps}
-        >
-          <Ionicons name="person-circle-outline" size={14} color={accent.blue} />
-          <Text style={[styles.authorText, { color: authorHovered ? accent.orange : accent.blue }]}>
-            By {deck.originalAuthorName}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.authorRow}>
+          <Text style={[styles.authorLabel, { color: textSecondary }]}>By </Text>
+          <TouchableOpacity
+            style={[
+              Platform.OS === 'web' && { cursor: 'pointer' } as any,
+            ]}
+            onPress={handleAuthorPress}
+            {...authorWebProps}
+          >
+            <Text style={[styles.authorName, { color: authorHovered ? accent.orange : accent.blue }]}>
+              {deck.originalAuthorName}
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Description */}
@@ -279,10 +279,12 @@ const styles = StyleSheet.create({
   authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
     marginBottom: spacing[2],
   },
-  authorText: {
+  authorLabel: {
+    fontSize: typography.sizes.sm,
+  },
+  authorName: {
     fontSize: typography.sizes.sm,
     fontWeight: typography.fontWeight.medium,
   },

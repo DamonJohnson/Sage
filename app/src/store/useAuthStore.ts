@@ -56,7 +56,7 @@ const DEFAULT_KEYBOARD_SHORTCUTS = {
 };
 
 const DEFAULT_SETTINGS: UserSettings = {
-  theme: 'system',
+  theme: 'dark',
   hapticFeedback: true,
   soundEffects: true,
   dailyGoal: 20,

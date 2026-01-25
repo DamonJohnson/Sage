@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,10 @@ import {
   Alert,
   Platform,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -23,74 +24,120 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { GradientButton } from '@/components/ui';
+import { EditCardModal, type CardData } from '@/components/cards';
 import { useDeckStore } from '@/store';
 import { useThemedColors } from '@/hooks/useThemedColors';
+import { useResponsive, responsive } from '@/hooks/useResponsive';
 import { spacing, typography, borderRadius, shadows } from '@/theme';
-import { generateFromTopic, generateMockCards, type GeneratedCard } from '@/services/ai';
+import { generateFromTopic, generateMockCards, refineCards, type GeneratedCard } from '@/services/ai';
 
 interface PreviewCard extends GeneratedCard {
   id: string;
 }
 
-const POPULAR_TOPICS = [
-  { emoji: '', label: 'Spanish Basics' },
-  { emoji: '', label: 'Biology 101' },
-  { emoji: '', label: 'Economics' },
-  { emoji: '', label: 'Art History' },
-  { emoji: '', label: 'Constitutional Law' },
-  { emoji: '', label: 'Psychology' },
-];
 
 const DIFFICULTY_OPTIONS = [
-  { value: 'beginner', label: 'Beginner' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'advanced', label: 'Advanced' },
+  { value: 'basic', label: 'Basic', description: 'Elementary to Middle School level. Simple concepts, basic vocabulary.' },
+  { value: 'intermediate', label: 'Standard', description: 'High School level. Moderate complexity, some technical terms.' },
+  { value: 'advanced', label: 'Advanced', description: 'University level. Complex relationships, technical language.' },
+  { value: 'expert', label: 'Expert', description: 'Graduate/Professional level. Nuanced details, assumes prior knowledge.' },
+];
+
+const GENERATION_PHASES = [
+  'Analyzing topic...',
+  'Creating questions...',
+  'Generating answers...',
+  'Polishing cards...',
+];
+
+const QUICK_INSTRUCTIONS = [
+  { label: 'Definitions', instruction: 'Focus on definitions and key terms' },
+  { label: 'Examples', instruction: 'Include practical examples in answers' },
+];
+
+const REFINE_QUICK_OPTIONS = [
+  { label: 'Simplify', instruction: 'Simplify all cards - use simpler language' },
+  { label: 'Add examples', instruction: 'Add practical examples to all answers' },
+  { label: 'More detail', instruction: 'Add more detail and context to all answers' },
+  { label: 'Make harder', instruction: 'Make questions more challenging and specific' },
 ];
 
 export function CreateAIScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { addDeck, addCards } = useDeckStore();
+  const route = useRoute<any>();
+  const existingDeckId = route.params?.deckId as string | undefined;
+  const { addDeck, addCards, getDeck } = useDeckStore();
+  const existingDeck = existingDeckId ? getDeck(existingDeckId) : null;
   const { background, surface, surfaceHover, border, textPrimary, textSecondary, accent } = useThemedColors();
+  const responsiveInfo = useResponsive();
 
   const [topic, setTopic] = useState('');
-  const [cardCount, setCardCount] = useState(15);
-  const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('intermediate');
+  const [cardCount, setCardCount] = useState(10);
+  const [difficulty, setDifficulty] = useState<'basic' | 'intermediate' | 'advanced' | 'expert'>('intermediate');
+  const [multipleChoiceRatio, setMultipleChoiceRatio] = useState(0); // 0 = all flashcards, 0.5 = half, 1 = all MC
   const [isPublic, setIsPublic] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationPhase, setGenerationPhase] = useState(0);
+
+  // Custom instructions state
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [showDifficultyInfo, setShowDifficultyInfo] = useState(false);
+
+  // Clarification modal state
+  const [showClarificationModal, setShowClarificationModal] = useState(false);
+  const [clarificationQuestions, setClarificationQuestions] = useState<string[]>([]);
+  const [clarificationReason, setClarificationReason] = useState<string | null>(null);
+  const [clarificationAnswers, setClarificationAnswers] = useState<string[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
 
   // Preview mode state
   const [showPreview, setShowPreview] = useState(false);
   const [previewCards, setPreviewCards] = useState<PreviewCard[]>([]);
   const [deckTitle, setDeckTitle] = useState('');
   const [deckDescription, setDeckDescription] = useState('');
-  const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [editCardFront, setEditCardFront] = useState('');
-  const [editCardBack, setEditCardBack] = useState('');
+  const [editingCard, setEditingCard] = useState<PreviewCard | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const pulseAnim = useSharedValue(1);
+  // Refine deck modal state
+  const [showRefineModal, setShowRefineModal] = useState(false);
+  const [refineInstructions, setRefineInstructions] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
 
-  React.useEffect(() => {
+  // Animation values
+  const spinAnim = useSharedValue(0);
+
+  // Generation phase cycling
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
     if (isGenerating) {
-      pulseAnim.value = withRepeat(
-        withTiming(1.1, { duration: 800 }),
+      setGenerationPhase(0);
+      interval = setInterval(() => {
+        setGenerationPhase((prev) => (prev + 1) % GENERATION_PHASES.length);
+      }, 2000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isGenerating]);
+
+  // Animation for generating state - spinning wheel
+  useEffect(() => {
+    if (isGenerating) {
+      // Continuous spin animation
+      spinAnim.value = withRepeat(
+        withTiming(360, { duration: 1200 }),
         -1,
-        true
+        false
       );
     } else {
-      pulseAnim.value = 1;
+      spinAnim.value = 0;
     }
   }, [isGenerating]);
 
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseAnim.value }],
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spinAnim.value}deg` }],
   }));
-
-  const handleTopicSelect = (label: string) => {
-    Haptics.selectionAsync();
-    setTopic(label);
-  };
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -108,6 +155,8 @@ export function CreateAIScreen() {
         topic: topic.trim(),
         count: cardCount,
         difficulty,
+        customInstructions: customInstructions.trim() || undefined,
+        multipleChoiceRatio,
       });
 
       if (response.success && response.data?.cards) {
@@ -132,7 +181,8 @@ export function CreateAIScreen() {
     // Set up preview mode
     setPreviewCards(cardsWithIds);
     setDeckTitle(topic);
-    setDeckDescription(`AI-generated flashcards about ${topic} (${difficulty} level)`);
+    const difficultyLabel = DIFFICULTY_OPTIONS.find(d => d.value === difficulty)?.label || difficulty;
+    setDeckDescription(`AI-generated flashcards about ${topic} (${difficultyLabel} level)`);
     setIsGenerating(false);
     setShowPreview(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -152,62 +202,71 @@ export function CreateAIScreen() {
     setIsSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Create deck
-    const deckId = await addDeck({
-      userId: 'stub-user-1',
-      title: deckTitle.trim(),
-      description: deckDescription.trim(),
-      isPublic: isPublic,
-      category: null,
-      tags: [difficulty, 'ai-generated'],
-      cardCount: previewCards.length,
-      downloadCount: 0,
-      ratingSum: 0,
-      ratingCount: 0,
-    });
-
-    if (!deckId) {
-      setIsSaving(false);
-      Alert.alert('Error', 'Failed to create deck. Please try again.');
-      return;
-    }
-
-    // Add cards in batch
+    // Add cards in batch - preserve card type and options
     const cardsToAdd = previewCards.map((card) => ({
       front: card.front,
       back: card.back,
       cardType: card.cardType || 'flashcard',
-      options: null,
+      options: card.options || null,
+      explanation: card.explanation || null,
     }));
 
-    await addCards(deckId, cardsToAdd);
+    let targetDeckId = existingDeckId;
+
+    // Create new deck only if we're not adding to an existing one
+    if (!existingDeckId) {
+      targetDeckId = await addDeck({
+        userId: 'stub-user-1',
+        title: deckTitle.trim(),
+        description: deckDescription.trim(),
+        isPublic: isPublic,
+        cardCount: previewCards.length,
+        downloadCount: 0,
+        ratingSum: 0,
+        ratingCount: 0,
+        originalAuthorId: null,
+        originalAuthorName: null,
+        originalAuthorAvatar: null,
+        originalDeckId: null,
+      });
+
+      if (!targetDeckId) {
+        setIsSaving(false);
+        Alert.alert('Error', 'Failed to create deck. Please try again.');
+        return;
+      }
+    }
+
+    await addCards(targetDeckId!, cardsToAdd);
 
     setIsSaving(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // Navigate to the newly created deck
-    navigation.replace('DeckDetail', { deckId });
+
+    // Navigate to the deck
+    navigation.navigate('DeckDetail', { deckId: targetDeckId });
   };
 
   const handleEditCard = (card: PreviewCard) => {
-    setEditingCardId(card.id);
-    setEditCardFront(card.front);
-    setEditCardBack(card.back);
+    setEditingCard(card);
   };
 
-  const handleSaveCardEdit = () => {
-    if (!editingCardId) return;
+  const handleSaveCardEdit = (updatedCard: CardData) => {
+    if (!editingCard) return;
 
     setPreviewCards((prev) =>
       prev.map((card) =>
-        card.id === editingCardId
-          ? { ...card, front: editCardFront.trim(), back: editCardBack.trim() }
+        card.id === editingCard.id
+          ? {
+              ...card,
+              front: updatedCard.front,
+              back: updatedCard.back,
+              cardType: updatedCard.cardType,
+              options: updatedCard.options,
+            }
           : card
       )
     );
-    setEditingCardId(null);
-    setEditCardFront('');
-    setEditCardBack('');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setEditingCard(null);
   };
 
   const handleDeleteCard = (cardId: string) => {
@@ -228,22 +287,58 @@ export function CreateAIScreen() {
     );
   };
 
+  // State for discard confirmation modal (cross-platform)
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
+
   const handleBackToEdit = () => {
-    Alert.alert(
-      'Discard Changes?',
-      'Going back will discard all generated cards. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Discard',
-          style: 'destructive',
-          onPress: () => {
-            setShowPreview(false);
-            setPreviewCards([]);
-          },
-        },
-      ]
-    );
+    // Use a modal instead of Alert for better web compatibility
+    setShowDiscardModal(true);
+  };
+
+  const confirmDiscard = () => {
+    setShowDiscardModal(false);
+    setShowPreview(false);
+    setPreviewCards([]);
+  };
+
+  // Refine entire deck
+  const handleRefineDeck = async (instructions: string) => {
+    if (!instructions.trim() || previewCards.length === 0) return;
+
+    setIsRefining(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const response = await refineCards({
+        cards: previewCards.map(c => ({ front: c.front, back: c.back })),
+        instructions: instructions.trim(),
+      });
+
+      if (response.success && response.data?.cards) {
+        // Update cards while preserving IDs
+        const refinedCardsWithIds: PreviewCard[] = response.data.cards.map((card, index) => ({
+          ...card,
+          id: previewCards[index]?.id || `refined-${index}-${Date.now()}`,
+        }));
+        setPreviewCards(refinedCardsWithIds);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Error', response.error || 'Failed to refine cards');
+      }
+    } catch (error) {
+      console.error('Refine error:', error);
+      Alert.alert('Error', 'Failed to refine cards. Please try again.');
+    }
+
+    setIsRefining(false);
+    setShowRefineModal(false);
+    setRefineInstructions('');
+  };
+
+  // Set quick instruction chip (replaces existing content)
+  const handleQuickInstruction = (instruction: string) => {
+    setCustomInstructions(instruction);
+    Haptics.selectionAsync();
   };
 
   // Preview Mode UI
@@ -322,6 +417,29 @@ export function CreateAIScreen() {
             />
           </View>
 
+          {/* Save Button */}
+          <View style={styles.saveButtonContainer}>
+            <GradientButton
+              title={isSaving ? 'Saving...' : 'Save Deck'}
+              onPress={handleSaveDeck}
+              size="lg"
+              disabled={isSaving || !deckTitle.trim() || previewCards.length === 0}
+              icon={<Ionicons name="checkmark" size={20} color="#FFFFFF" />}
+            />
+          </View>
+
+          {/* Refine with AI Button */}
+          <TouchableOpacity
+            style={[styles.refineButton, { backgroundColor: accent.purple + '15', borderColor: accent.purple }]}
+            onPress={() => setShowRefineModal(true)}
+            disabled={isRefining}
+          >
+            <Ionicons name="sparkles" size={18} color={accent.purple} />
+            <Text style={[styles.refineButtonText, { color: accent.purple }]}>
+              Refine with AI
+            </Text>
+          </TouchableOpacity>
+
           {/* Cards Section */}
           <View style={styles.section}>
             <View style={styles.cardsSectionHeader}>
@@ -355,63 +473,105 @@ export function CreateAIScreen() {
                   </View>
                 </View>
                 <View style={styles.previewCardContent}>
-                  <Text style={[styles.previewCardLabel, { color: textSecondary }]}>Front</Text>
+                  {/* Card type badge */}
+                  {card.cardType === 'multiple_choice' && (
+                    <View style={[styles.cardTypeBadge, { backgroundColor: accent.blue + '20' }]}>
+                      <Ionicons name="list-outline" size={12} color={accent.blue} />
+                      <Text style={[styles.cardTypeBadgeText, { color: accent.blue }]}>Multiple Choice</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.previewCardLabel, { color: textSecondary }]}>Question</Text>
                   <Text style={[styles.previewCardText, { color: textPrimary }]}>{card.front}</Text>
                   <View style={[styles.previewCardDivider, { backgroundColor: border }]} />
-                  <Text style={[styles.previewCardLabel, { color: textSecondary }]}>Back</Text>
+                  <Text style={[styles.previewCardLabel, { color: textSecondary }]}>Answer</Text>
                   <Text style={[styles.previewCardText, { color: textPrimary }]}>{card.back}</Text>
+                  {/* Show options for multiple choice */}
+                  {card.cardType === 'multiple_choice' && card.options && card.options.length > 0 && (
+                    <View style={styles.optionsContainer}>
+                      <Text style={[styles.previewCardLabel, { color: textSecondary, marginTop: spacing[2] }]}>Options</Text>
+                      {card.options.map((option, i) => (
+                        <View key={i} style={[
+                          styles.optionItem,
+                          { backgroundColor: option === card.back ? accent.green + '15' : surfaceHover }
+                        ]}>
+                          <Text style={[
+                            styles.optionText,
+                            { color: option === card.back ? accent.green : textPrimary }
+                          ]}>
+                            {String.fromCharCode(65 + i)}. {option}
+                          </Text>
+                          {option === card.back && (
+                            <Ionicons name="checkmark-circle" size={16} color={accent.green} />
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  {/* Show explanation if available */}
+                  {card.explanation && (
+                    <View style={[styles.explanationContainer, { borderColor: border }]}>
+                      <Text style={[styles.previewCardLabel, { color: textSecondary }]}>Explanation</Text>
+                      <Text style={[styles.explanationText, { color: textSecondary }]}>{card.explanation}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
             ))}
-          </View>
-
-          {/* Save Button */}
-          <View style={styles.saveButtonContainer}>
-            <GradientButton
-              title={isSaving ? 'Saving...' : 'Save Deck'}
-              onPress={handleSaveDeck}
-              size="lg"
-              disabled={isSaving || !deckTitle.trim() || previewCards.length === 0}
-              icon={<Ionicons name="checkmark" size={20} color="#FFFFFF" />}
-            />
           </View>
 
           <View style={{ height: spacing[20] }} />
         </ScrollView>
 
         {/* Edit Card Modal */}
+        <EditCardModal
+          visible={editingCard !== null}
+          card={editingCard}
+          onClose={() => setEditingCard(null)}
+          onSave={handleSaveCardEdit}
+        />
+
+        {/* Refine Deck Modal */}
         <Modal
-          visible={editingCardId !== null}
+          visible={showRefineModal}
           transparent
           animationType="slide"
-          onRequestClose={() => setEditingCardId(null)}
+          onRequestClose={() => setShowRefineModal(false)}
         >
           <View style={styles.modalOverlay}>
             <View style={[styles.editModal, { backgroundColor: surface }]}>
               <View style={styles.editModalHeader}>
-                <Text style={[styles.editModalTitle, { color: textPrimary }]}>Edit Card</Text>
-                <TouchableOpacity onPress={() => setEditingCardId(null)}>
+                <Text style={[styles.editModalTitle, { color: textPrimary }]}>Refine Deck with AI</Text>
+                <TouchableOpacity onPress={() => setShowRefineModal(false)}>
                   <Ionicons name="close" size={24} color={textSecondary} />
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.sectionLabel, { color: textSecondary }]}>Front (Question)</Text>
-              <TextInput
-                style={[styles.editModalInput, { backgroundColor: background, color: textPrimary, borderColor: border }]}
-                value={editCardFront}
-                onChangeText={setEditCardFront}
-                placeholder="Enter the question"
-                placeholderTextColor={textSecondary}
-                multiline
-                numberOfLines={3}
-              />
+              <Text style={[styles.modalDescription, { color: textSecondary }]}>
+                Modify all {previewCards.length} cards based on your instructions
+              </Text>
 
-              <Text style={[styles.sectionLabel, { color: textSecondary, marginTop: spacing[4] }]}>Back (Answer)</Text>
+              <Text style={[styles.sectionLabel, { color: textSecondary, marginTop: spacing[4] }]}>Quick Actions</Text>
+              <View style={styles.quickActionsGrid}>
+                {REFINE_QUICK_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.label}
+                    style={[styles.quickActionChip, { backgroundColor: surfaceHover, borderColor: border }]}
+                    onPress={() => handleRefineDeck(option.instruction)}
+                    disabled={isRefining}
+                  >
+                    <Text style={[styles.quickActionText, { color: textPrimary }]}>{option.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.sectionLabel, { color: textSecondary, marginTop: spacing[4] }]}>
+                Custom Instructions
+              </Text>
               <TextInput
                 style={[styles.editModalInput, { backgroundColor: background, color: textPrimary, borderColor: border }]}
-                value={editCardBack}
-                onChangeText={setEditCardBack}
-                placeholder="Enter the answer"
+                value={refineInstructions}
+                onChangeText={setRefineInstructions}
+                placeholder="e.g., Add more examples to answers..."
                 placeholderTextColor={textSecondary}
                 multiline
                 numberOfLines={3}
@@ -420,15 +580,57 @@ export function CreateAIScreen() {
               <View style={styles.editModalButtons}>
                 <TouchableOpacity
                   style={[styles.editModalCancelBtn, { borderColor: border }]}
-                  onPress={() => setEditingCardId(null)}
+                  onPress={() => setShowRefineModal(false)}
                 >
                   <Text style={[styles.editModalCancelText, { color: textSecondary }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.editModalSaveBtn, { backgroundColor: accent.orange }]}
-                  onPress={handleSaveCardEdit}
+                  style={[styles.editModalSaveBtn, { backgroundColor: accent.purple, opacity: isRefining || !refineInstructions.trim() ? 0.5 : 1 }]}
+                  onPress={() => handleRefineDeck(refineInstructions)}
+                  disabled={isRefining || !refineInstructions.trim()}
                 >
-                  <Text style={styles.editModalSaveText}>Save Changes</Text>
+                  {isRefining ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="sparkles" size={16} color="#fff" />
+                      <Text style={styles.editModalSaveText}>Refine Cards</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Discard Confirmation Modal */}
+        <Modal
+          visible={showDiscardModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowDiscardModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.discardModal, { backgroundColor: surface }]}>
+              <View style={styles.discardModalIcon}>
+                <Ionicons name="warning-outline" size={40} color={accent.orange} />
+              </View>
+              <Text style={[styles.discardModalTitle, { color: textPrimary }]}>Discard Changes?</Text>
+              <Text style={[styles.discardModalText, { color: textSecondary }]}>
+                Going back will discard all {previewCards.length} generated cards. This action cannot be undone.
+              </Text>
+              <View style={styles.discardModalButtons}>
+                <TouchableOpacity
+                  style={[styles.discardCancelBtn, { borderColor: border }]}
+                  onPress={() => setShowDiscardModal(false)}
+                >
+                  <Text style={[styles.discardCancelText, { color: textSecondary }]}>Keep Editing</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.discardConfirmBtn, { backgroundColor: accent.red }]}
+                  onPress={confirmDiscard}
+                >
+                  <Text style={styles.discardConfirmText}>Discard</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -449,7 +651,9 @@ export function CreateAIScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: textPrimary }]}>AI Generate</Text>
+        <Text style={[styles.headerTitle, { color: textPrimary }]}>
+          {existingDeck ? `Add to: ${existingDeck.title}` : 'AI Generate'}
+        </Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -475,50 +679,18 @@ export function CreateAIScreen() {
           />
         </View>
 
-        {/* Popular Topics */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: textSecondary }]}>Popular Topics</Text>
-          <View style={styles.topicsGrid}>
-            {POPULAR_TOPICS.map((item) => (
-              <TouchableOpacity
-                key={item.label}
-                style={[
-                  styles.topicChip,
-                  { backgroundColor: surface, borderColor: border },
-                  topic === item.label && { backgroundColor: accent.orange + '15', borderColor: accent.orange },
-                ]}
-                onPress={() => handleTopicSelect(item.label)}
-                disabled={isGenerating}
-              >
-                <Text style={styles.topicEmoji}>{item.emoji}</Text>
-                <Text
-                  style={[
-                    styles.topicLabel,
-                    { color: textSecondary },
-                    topic === item.label && { color: accent.orange, fontWeight: '500' },
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
 
         {/* Card Count */}
         <View style={styles.section}>
-          <View style={styles.sliderHeader}>
-            <Text style={[styles.sectionLabel, { color: textSecondary }]}>Number of Cards</Text>
-            <Text style={[styles.sliderValue, { color: accent.orange }]}>{cardCount}</Text>
-          </View>
+          <Text style={[styles.sectionLabel, { color: textSecondary }]}>Number of Cards</Text>
           <View style={styles.countButtons}>
-            {[10, 15, 25, 50].map((count) => (
+            {[5, 10, 20, 50, 100].map((count) => (
               <TouchableOpacity
                 key={count}
                 style={[
                   styles.countButton,
                   { backgroundColor: surface, borderColor: border },
-                  cardCount === count && { backgroundColor: accent.orange, borderColor: accent.orange },
+                  cardCount === count && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
                 ]}
                 onPress={() => {
                   Haptics.selectionAsync();
@@ -530,7 +702,7 @@ export function CreateAIScreen() {
                   style={[
                     styles.countButtonText,
                     { color: textSecondary },
-                    cardCount === count && { color: '#FFFFFF' },
+                    cardCount === count && { color: accent.orange },
                   ]}
                 >
                   {count}
@@ -542,15 +714,23 @@ export function CreateAIScreen() {
 
         {/* Difficulty */}
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: textSecondary }]}>Difficulty Level</Text>
-          <View style={styles.difficultyRow}>
+          <View style={styles.difficultyHeader}>
+            <Text style={[styles.sectionLabel, { color: textSecondary, marginBottom: 0 }]}>Difficulty Level</Text>
+            <TouchableOpacity
+              style={styles.infoButton}
+              onPress={() => setShowDifficultyInfo(true)}
+            >
+              <Ionicons name="information-circle-outline" size={18} color={textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.difficultyGrid}>
             {DIFFICULTY_OPTIONS.map((option) => (
               <TouchableOpacity
                 key={option.value}
                 style={[
                   styles.difficultyButton,
                   { backgroundColor: surface, borderColor: border },
-                  difficulty === option.value && { backgroundColor: accent.orange, borderColor: accent.orange },
+                  difficulty === option.value && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
                 ]}
                 onPress={() => {
                   Haptics.selectionAsync();
@@ -562,7 +742,7 @@ export function CreateAIScreen() {
                   style={[
                     styles.difficultyText,
                     { color: textSecondary },
-                    difficulty === option.value && { color: '#FFFFFF' },
+                    difficulty === option.value && { color: accent.orange },
                   ]}
                 >
                   {option.label}
@@ -572,9 +752,134 @@ export function CreateAIScreen() {
           </View>
         </View>
 
+        {/* Card Type */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: textSecondary }]}>Card Type</Text>
+          <View style={styles.cardTypeGrid}>
+            <TouchableOpacity
+              style={[
+                styles.cardTypeOption,
+                { backgroundColor: surface, borderColor: border },
+                multipleChoiceRatio === 0 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setMultipleChoiceRatio(0);
+              }}
+              disabled={isGenerating}
+            >
+              <Ionicons
+                name="documents-outline"
+                size={20}
+                color={multipleChoiceRatio === 0 ? accent.orange : textSecondary}
+              />
+              <Text
+                style={[
+                  styles.cardTypeOptionText,
+                  { color: textSecondary },
+                  multipleChoiceRatio === 0 && { color: accent.orange },
+                ]}
+              >
+                Flashcards Only
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.cardTypeOption,
+                { backgroundColor: surface, borderColor: border },
+                multipleChoiceRatio === 0.5 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setMultipleChoiceRatio(0.5);
+              }}
+              disabled={isGenerating}
+            >
+              <Ionicons
+                name="grid-outline"
+                size={20}
+                color={multipleChoiceRatio === 0.5 ? accent.orange : textSecondary}
+              />
+              <Text
+                style={[
+                  styles.cardTypeOptionText,
+                  { color: textSecondary },
+                  multipleChoiceRatio === 0.5 && { color: accent.orange },
+                ]}
+              >
+                Mixed
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.cardTypeOption,
+                { backgroundColor: surface, borderColor: border },
+                multipleChoiceRatio === 1 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setMultipleChoiceRatio(1);
+              }}
+              disabled={isGenerating}
+            >
+              <Ionicons
+                name="list-outline"
+                size={20}
+                color={multipleChoiceRatio === 1 ? accent.orange : textSecondary}
+              />
+              <Text
+                style={[
+                  styles.cardTypeOptionText,
+                  { color: textSecondary },
+                  multipleChoiceRatio === 1 && { color: accent.orange },
+                ]}
+              >
+                Multiple Choice
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Custom Instructions */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: textSecondary }]}>Custom Instructions (optional)</Text>
+          <TextInput
+            style={[styles.customInstructionsInput, { backgroundColor: surface, color: textPrimary, borderColor: border }]}
+            value={customInstructions}
+            onChangeText={setCustomInstructions}
+            placeholder="e.g., Focus on vocabulary, include examples..."
+            placeholderTextColor={textSecondary}
+            multiline
+            numberOfLines={2}
+            maxLength={500}
+            editable={!isGenerating}
+          />
+          <View style={styles.quickInstructionsRow}>
+            {QUICK_INSTRUCTIONS.map((item) => (
+              <TouchableOpacity
+                key={item.label}
+                style={[styles.quickInstructionChip, { backgroundColor: surfaceHover, borderColor: border }]}
+                onPress={() => handleQuickInstruction(item.instruction)}
+                disabled={isGenerating}
+              >
+                <Text style={[styles.quickInstructionText, { color: textPrimary }]}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         {/* Privacy Setting */}
         <View style={styles.section}>
-          <View style={[styles.privacySetting, { backgroundColor: surface }]}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (!isGenerating) {
+                Haptics.selectionAsync();
+                setIsPublic(!isPublic);
+              }
+            }}
+            style={[styles.privacySetting, { backgroundColor: surface }]}
+          >
             <View style={styles.privacyInfo}>
               <Ionicons
                 name={isPublic ? 'globe-outline' : 'lock-closed-outline'}
@@ -602,21 +907,24 @@ export function CreateAIScreen() {
               thumbColor={isPublic ? accent.green : surfaceHover}
               disabled={isGenerating}
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Generate Button */}
         <View style={styles.generateContainer}>
           {isGenerating ? (
-            <Animated.View style={[styles.generatingContainer, { backgroundColor: surface }, pulseStyle]}>
-              <View style={[styles.generatingIcon, { backgroundColor: accent.orange + '20' }]}>
-                <Ionicons name="sparkles" size={32} color={accent.orange} />
+            <View style={[styles.generatingButton, { backgroundColor: accent.purple }]}>
+              <View style={styles.spinnerWrapper}>
+                <Animated.View style={[styles.spinnerSmall, spinStyle]}>
+                  <View style={[styles.spinnerRingSmall, { borderColor: '#fff' }]} />
+                </Animated.View>
               </View>
-              <Text style={[styles.generatingTitle, { color: textPrimary }]}>Generating your flashcards...</Text>
-              <Text style={[styles.generatingSubtitle, { color: textSecondary }]}>
-                Our AI is creating {cardCount} cards about {topic}
-              </Text>
-            </Animated.View>
+              <View style={styles.generatingTextWrapper}>
+                <Text style={styles.generatingButtonText}>
+                  {GENERATION_PHASES[generationPhase]}
+                </Text>
+              </View>
+            </View>
           ) : (
             <GradientButton
               title="Generate Flashcards"
@@ -629,16 +937,65 @@ export function CreateAIScreen() {
           )}
         </View>
 
-        {/* Info */}
-        <View style={[styles.infoCard, { backgroundColor: surfaceHover }]}>
-          <Ionicons name="information-circle-outline" size={20} color={textSecondary} />
-          <Text style={[styles.infoText, { color: textSecondary }]}>
-            AI-generated cards use OpenAI to create high-quality flashcards. You can edit or add to the generated deck after creation.
-          </Text>
-        </View>
-
         <View style={{ height: spacing[20] }} />
       </ScrollView>
+
+      {/* Difficulty Info Modal */}
+      <Modal
+        visible={showDifficultyInfo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDifficultyInfo(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.difficultyInfoModal, { backgroundColor: surface }]}>
+            <View style={styles.editModalHeader}>
+              <Text style={[styles.editModalTitle, { color: textPrimary }]}>Difficulty Levels</Text>
+              <TouchableOpacity onPress={() => setShowDifficultyInfo(false)}>
+                <Ionicons name="close" size={24} color={textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {DIFFICULTY_OPTIONS.map((option, index) => (
+              <View
+                key={option.value}
+                style={[
+                  styles.difficultyInfoItem,
+                  { borderBottomColor: border },
+                  index === DIFFICULTY_OPTIONS.length - 1 && { borderBottomWidth: 0 },
+                ]}
+              >
+                <View style={styles.difficultyInfoHeader}>
+                  <View style={[
+                    styles.difficultyInfoBadge,
+                    { backgroundColor: difficulty === option.value ? accent.orange : surfaceHover },
+                  ]}>
+                    <Text style={[
+                      styles.difficultyInfoBadgeText,
+                      { color: difficulty === option.value ? '#fff' : textPrimary },
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </View>
+                  {difficulty === option.value && (
+                    <Ionicons name="checkmark-circle" size={18} color={accent.orange} />
+                  )}
+                </View>
+                <Text style={[styles.difficultyInfoDescription, { color: textSecondary }]}>
+                  {option.description}
+                </Text>
+              </View>
+            ))}
+
+            <TouchableOpacity
+              style={[styles.difficultyInfoClose, { backgroundColor: accent.orange }]}
+              onPress={() => setShowDifficultyInfo(false)}
+            >
+              <Text style={styles.difficultyInfoCloseText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -697,27 +1054,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.lg,
     minHeight: 100,
     ...shadows.sm,
-  },
-  topicsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  topicChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: borderRadius.full,
-    marginRight: spacing[2],
-    marginBottom: spacing[2],
-    borderWidth: 1,
-  },
-  topicEmoji: {
-    fontSize: 16,
-    marginRight: spacing[1],
-  },
-  topicLabel: {
-    fontSize: typography.sizes.sm,
   },
   sliderHeader: {
     flexDirection: 'row',
@@ -788,40 +1124,38 @@ const styles = StyleSheet.create({
   generateContainer: {
     marginBottom: spacing[6],
   },
-  generatingContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing[8],
-    borderRadius: borderRadius['2xl'],
-    ...shadows.md,
-  },
-  generatingIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing[4],
-  },
-  generatingTitle: {
-    fontSize: typography.sizes.lg,
-    fontWeight: '600',
-    marginBottom: spacing[2],
-  },
-  generatingSubtitle: {
-    fontSize: typography.sizes.sm,
-    textAlign: 'center',
-    paddingHorizontal: spacing[6],
-  },
-  infoCard: {
+  generatingButton: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[6],
     borderRadius: borderRadius.xl,
-    padding: spacing[4],
   },
-  infoText: {
-    flex: 1,
-    fontSize: typography.sizes.sm,
-    marginLeft: spacing[2],
-    lineHeight: 20,
+  spinnerWrapper: {
+    width: 24,
+    marginRight: spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  generatingTextWrapper: {
+    minWidth: 150,
+  },
+  generatingButtonText: {
+    color: '#fff',
+    fontSize: typography.sizes.base,
+    fontWeight: '600',
+  },
+  spinnerSmall: {
+    width: 20,
+    height: 20,
+  },
+  spinnerRingSmall: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderStyle: 'dashed',
   },
   // Preview mode styles
   successBanner: {
@@ -905,6 +1239,45 @@ const styles = StyleSheet.create({
     height: 1,
     marginVertical: spacing[3],
   },
+  cardTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.md,
+    marginBottom: spacing[2],
+    gap: spacing[1],
+  },
+  cardTypeBadgeText: {
+    fontSize: typography.sizes.xs,
+    fontWeight: '600',
+  },
+  optionsContainer: {
+    marginTop: spacing[2],
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing[2],
+    borderRadius: borderRadius.md,
+    marginTop: spacing[1],
+  },
+  optionText: {
+    flex: 1,
+    fontSize: typography.sizes.sm,
+  },
+  explanationContainer: {
+    marginTop: spacing[3],
+    paddingTop: spacing[3],
+    borderTopWidth: 1,
+  },
+  explanationText: {
+    fontSize: typography.sizes.sm,
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
   saveButtonContainer: {
     marginTop: spacing[4],
     marginBottom: spacing[4],
@@ -912,57 +1285,255 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing[4],
   },
   editModal: {
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing[6],
-    maxHeight: '80%',
+    borderRadius: borderRadius.xl,
+    padding: spacing[5],
+    maxHeight: '90%',
+    width: '100%',
+    maxWidth: 500,
   },
   editModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing[6],
+    marginBottom: spacing[4],
   },
   editModalTitle: {
-    fontSize: typography.sizes.xl,
+    fontSize: typography.sizes.lg,
     fontWeight: '600',
   },
   editModalInput: {
     borderRadius: borderRadius.lg,
-    padding: spacing[4],
-    fontSize: typography.sizes.base,
+    padding: spacing[3],
+    fontSize: typography.sizes.sm,
     borderWidth: 1,
-    minHeight: 100,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
   editModalButtons: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: spacing[3],
-    marginTop: spacing[6],
+    marginTop: spacing[5],
   },
   editModalCancelBtn: {
-    flex: 1,
-    paddingVertical: spacing[3],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     alignItems: 'center',
   },
   editModalCancelText: {
-    fontSize: typography.sizes.base,
+    fontSize: typography.sizes.sm,
     fontWeight: '500',
   },
   editModalSaveBtn: {
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  editModalSaveText: {
+    color: '#fff',
+    fontSize: typography.sizes.base,
+    fontWeight: '600',
+  },
+  // Difficulty header with info button
+  difficultyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing[3],
+  },
+  infoButton: {
+    marginLeft: spacing[2],
+    padding: spacing[1],
+  },
+  difficultyGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -spacing[1],
+  },
+  // Card type options
+  cardTypeGrid: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  cardTypeOption: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[2],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    gap: spacing[1.5],
+  },
+  cardTypeOptionText: {
+    fontSize: typography.sizes.xs,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  // Custom instructions
+  customInstructionsInput: {
+    borderRadius: borderRadius.lg,
+    padding: spacing[3],
+    fontSize: typography.sizes.sm,
+    minHeight: 60,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    marginBottom: spacing[2],
+  },
+  quickInstructionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  quickInstructionChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+  },
+  quickInstructionText: {
+    fontSize: typography.sizes.sm,
+  },
+  // Refine button
+  refineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    padding: spacing[3],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    marginBottom: spacing[6],
+  },
+  refineButtonText: {
+    fontSize: typography.sizes.base,
+    fontWeight: '500',
+  },
+  // Quick actions grid
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  quickActionChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  quickActionText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '500',
+  },
+  modalDescription: {
+    fontSize: typography.sizes.sm,
+    marginBottom: spacing[2],
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+  },
+  // Difficulty info modal
+  difficultyInfoModal: {
+    borderRadius: borderRadius.xl,
+    padding: spacing[6],
+    marginHorizontal: spacing[4],
+    maxWidth: 400,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  difficultyInfoItem: {
+    paddingVertical: spacing[4],
+    borderBottomWidth: 1,
+  },
+  difficultyInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[2],
+  },
+  difficultyInfoBadge: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.md,
+  },
+  difficultyInfoBadgeText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '600',
+  },
+  difficultyInfoDescription: {
+    fontSize: typography.sizes.sm,
+    lineHeight: 20,
+  },
+  difficultyInfoClose: {
+    marginTop: spacing[4],
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+  },
+  difficultyInfoCloseText: {
+    color: '#fff',
+    fontSize: typography.sizes.base,
+    fontWeight: '600',
+  },
+  // Discard modal styles
+  discardModal: {
+    borderRadius: borderRadius.xl,
+    padding: spacing[6],
+    maxWidth: 340,
+    width: '100%',
+    alignItems: 'center',
+  },
+  discardModalIcon: {
+    marginBottom: spacing[4],
+  },
+  discardModalTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: '600',
+    marginBottom: spacing[2],
+    textAlign: 'center',
+  },
+  discardModalText: {
+    fontSize: typography.sizes.sm,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: spacing[6],
+  },
+  discardModalButtons: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    width: '100%',
+  },
+  discardCancelBtn: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  discardCancelText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '500',
+  },
+  discardConfirmBtn: {
     flex: 1,
     paddingVertical: spacing[3],
     borderRadius: borderRadius.lg,
     alignItems: 'center',
   },
-  editModalSaveText: {
+  discardConfirmText: {
     color: '#fff',
-    fontSize: typography.sizes.base,
+    fontSize: typography.sizes.sm,
     fontWeight: '600',
   },
 });

@@ -231,6 +231,11 @@ export function initializeDatabase() {
     db.exec(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
   } catch (e) { /* Column already exists */ }
 
+  // Migration: Add explanation column to cards
+  try {
+    db.exec(`ALTER TABLE cards ADD COLUMN explanation TEXT`);
+  } catch (e) { /* Column already exists */ }
+
   // Seed demo users for social features (insert if they don't exist)
   const demoUsers = [
     { id: 'user-sarah', email: 'sarah@example.com', name: 'Sarah Chen', streak: 15, longest: 30, bio: 'Medical student, loves anatomy flashcards' },

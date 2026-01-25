@@ -145,12 +145,14 @@ export function CreateManualScreen() {
         title: deckTitle.trim(),
         description: deckDescription.trim(),
         isPublic: isPublic,
-        category: null,
-        tags: [],
         cardCount: validCards.length,
         downloadCount: 0,
         ratingSum: 0,
         ratingCount: 0,
+        originalAuthorId: null,
+        originalAuthorName: null,
+        originalAuthorAvatar: null,
+        originalDeckId: null,
       });
 
       if (!deckId) {
@@ -239,7 +241,16 @@ export function CreateManualScreen() {
           </View>
 
           {/* Privacy Setting */}
-          <View style={[styles.privacySetting, { backgroundColor: surface, borderColor: border }]}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (Platform.OS !== 'web') {
+                Haptics.selectionAsync();
+              }
+              setIsPublic(!isPublic);
+            }}
+            style={[styles.privacySetting, { backgroundColor: surface, borderColor: border }]}
+          >
             <View style={styles.privacyInfo}>
               <Ionicons
                 name={isPublic ? 'globe-outline' : 'lock-closed-outline'}
@@ -268,7 +279,7 @@ export function CreateManualScreen() {
               trackColor={{ false: surfaceHover, true: accent.green + '80' }}
               thumbColor={isPublic ? accent.green : surfaceHover}
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Cards */}
@@ -319,19 +330,19 @@ export function CreateManualScreen() {
                   style={[
                     styles.cardTypeButton,
                     { borderColor: border },
-                    card.cardType === 'multiple_choice' && { backgroundColor: accent.purple + '20', borderColor: accent.purple },
+                    card.cardType === 'multiple_choice' && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
                   ]}
                   onPress={() => card.cardType !== 'multiple_choice' && handleToggleCardType(card.id)}
                 >
                   <Ionicons
                     name="list-outline"
                     size={16}
-                    color={card.cardType === 'multiple_choice' ? accent.purple : textSecondary}
+                    color={card.cardType === 'multiple_choice' ? accent.orange : textSecondary}
                   />
                   <Text
                     style={[
                       styles.cardTypeText,
-                      { color: card.cardType === 'multiple_choice' ? accent.purple : textSecondary },
+                      { color: card.cardType === 'multiple_choice' ? accent.orange : textSecondary },
                     ]}
                   >
                     Multiple Choice

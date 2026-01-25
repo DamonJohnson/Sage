@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useThemedColors } from '@/hooks/useThemedColors';
 import { typography } from '@/theme/typography';
 import { spacing, borderRadius } from '@/theme/spacing';
-import { useAuthStore } from '@/store';
+import { useAuthStore, useDeckStore } from '@/store';
 import { RadiatingLogo } from '@/components/ui';
 import * as Haptics from 'expo-haptics';
 
@@ -37,28 +37,30 @@ interface SidebarProps {
   onNavigate: (route: string) => void;
 }
 
-const navSections: NavSection[] = [
-  {
-    items: [
-      { id: 'Dashboard', label: 'Home', icon: 'home-outline' },
-      { id: 'Library', label: 'Library', icon: 'library-outline' },
-    ],
-  },
-  {
-    title: 'Study',
-    items: [
-      { id: 'Review', label: 'Review', icon: 'refresh-outline', badge: 12 },
-      { id: 'Statistics', label: 'Statistics', icon: 'bar-chart-outline' },
-    ],
-  },
-  {
-    title: 'Community',
-    items: [
-      { id: 'Discover', label: 'Discover', icon: 'compass-outline' },
-      { id: 'Social', label: 'Connections', icon: 'people-outline' },
-    ],
-  },
-];
+function getNavSections(totalDueCards: number): NavSection[] {
+  return [
+    {
+      items: [
+        { id: 'Dashboard', label: 'Home', icon: 'home-outline' },
+        { id: 'Library', label: 'Library', icon: 'library-outline' },
+      ],
+    },
+    {
+      title: 'Study',
+      items: [
+        { id: 'Review', label: 'Review', icon: 'refresh-outline', badge: totalDueCards > 0 ? totalDueCards : undefined },
+        { id: 'Statistics', label: 'Statistics', icon: 'bar-chart-outline' },
+      ],
+    },
+    {
+      title: 'Community',
+      items: [
+        { id: 'Discover', label: 'Discover', icon: 'compass-outline' },
+        { id: 'Social', label: 'Connections', icon: 'people-outline' },
+      ],
+    },
+  ];
+}
 
 const bottomNavItems: NavItem[] = [
   { id: 'Settings', label: 'Settings', icon: 'settings-outline' },
@@ -139,6 +141,7 @@ function NavItemButton({
 
 export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
   const { user, signOut } = useAuthStore();
+  const { decks } = useDeckStore();
   const { isDark, toggleTheme } = useTheme();
   const { background, surface, surfaceHover, border, textPrimary, textSecondary, accent } = useThemedColors();
 
@@ -146,6 +149,14 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
   const [createHovered, setCreateHovered] = useState(false);
   const [userHovered, setUserHovered] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Calculate total due cards from all decks
+  const totalDueCards = useMemo(() => {
+    return decks.reduce((sum, deck) => sum + (deck.dueCount || 0), 0);
+  }, [decks]);
+
+  // Generate nav sections with actual due count
+  const navSections = useMemo(() => getNavSections(totalDueCards), [totalDueCards]);
 
   const handleSignOut = async () => {
     setShowUserMenu(false);

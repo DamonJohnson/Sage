@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 
 import { GradientButton, ProgressBar } from '@/components/ui';
 import { DeckCard } from '@/components/deck';
+import { Footer } from '@/components/layout';
 import { useAuthStore, useDeckStore, useStudyStore } from '@/store';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
@@ -46,7 +47,7 @@ export function DashboardScreen() {
   // Hover states for buttons
   const themeToggle = useHoverState();
   const searchBtn = useHoverState();
-  const createDeckBtn = useHoverState();
+  const discoverBtn = useHoverState();
   const streakBadge = useHoverState();
   const startReview = useHoverState();
   const seeAllBtn = useHoverState();
@@ -61,7 +62,7 @@ export function DashboardScreen() {
   const webButtonStyle = Platform.OS === 'web' ? {
     cursor: 'pointer' as const,
     transition: 'transform 150ms ease, background-color 150ms ease, box-shadow 150ms ease',
-  } : {};
+  } as any : {};
 
   const totalCards = decks.reduce((sum, d) => sum + d.cardCount, 0);
   const totalMastered = decks.reduce((sum, d) => sum + d.masteredCount, 0);
@@ -174,18 +175,6 @@ export function DashboardScreen() {
             <>
               <TouchableOpacity
                 style={[
-                  styles.searchBtn,
-                  { backgroundColor: createDeckBtn.isHovered ? surfaceHover : surface, borderColor: createDeckBtn.isHovered ? accent.orange : border },
-                  webButtonStyle,
-                ]}
-                onPress={() => navigation.navigate('CreateTab' as never)}
-                {...createDeckBtn.webProps}
-              >
-                <Ionicons name="add" size={18} color={createDeckBtn.isHovered ? accent.orange : textPrimary} />
-                <Text style={[styles.searchBtnText, { color: createDeckBtn.isHovered ? accent.orange : textPrimary }]}>Create Deck</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
                   styles.createDeckBtn,
                   { backgroundColor: accent.orange },
                   webButtonStyle,
@@ -196,6 +185,19 @@ export function DashboardScreen() {
               >
                 <Ionicons name="play" size={18} color="#fff" />
                 <Text style={styles.createDeckText}>Study Now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.discoverBtn,
+                  { backgroundColor: discoverBtn.isHovered ? surfaceHover : surface, borderColor: discoverBtn.isHovered ? accent.blue : border },
+                  webButtonStyle,
+                  discoverBtn.isHovered && styles.btnHovered,
+                ]}
+                onPress={() => navigation.navigate('DiscoverTab' as never)}
+                {...discoverBtn.webProps}
+              >
+                <Ionicons name="compass-outline" size={18} color={accent.blue} />
+                <Text style={[styles.discoverBtnText, { color: discoverBtn.isHovered ? accent.blue : textPrimary }]}>Discover</Text>
               </TouchableOpacity>
             </>
           )}
@@ -593,8 +595,12 @@ export function DashboardScreen() {
         )}
       </View>
 
-      {/* Bottom spacing */}
-      <View style={{ height: spacing[20] }} />
+      {/* Footer */}
+      <View style={{ marginTop: spacing[6] }}>
+        <Footer />
+      </View>
+
+      <View style={{ height: spacing[10] }} />
 
       {/* Mastery Info Modal */}
       <Modal
@@ -706,6 +712,19 @@ const styles = StyleSheet.create({
   },
   createDeckText: {
     color: '#fff',
+    fontWeight: typography.fontWeight.medium,
+    fontSize: typography.sizes.base,
+  },
+  discoverBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  discoverBtnText: {
     fontWeight: typography.fontWeight.medium,
     fontSize: typography.sizes.base,
   },

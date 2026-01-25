@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity, Dimensions, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, Dimensions, Platform, Image, Modal } from 'react-native';
 
 // Reusable hover hook for web
 function useHoverState() {
@@ -179,9 +179,10 @@ function McSubmitButton({
 
 export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult, showHotkeys, shortcutsEnabled = true, hotkeyBindings }: StudyCardProps) {
   const rotation = useSharedValue(0);
-  const { surface, surfaceHover, border, textPrimary, textSecondary, accent } = useThemedColors();
+  const { surface, surfaceHover, border, textPrimary, textSecondary, accent, background } = useThemedColors();
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const isMultipleChoice = card.cardType === 'multiple_choice' && card.options;
 
@@ -208,6 +209,12 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
     const handleKeyDown = (event: KeyboardEvent) => {
       if (hasSubmitted) return;
 
+      // Normalize key for comparison (uppercase for consistency with stored bindings)
+      let key = event.key;
+      if (key.length === 1) {
+        key = key.toUpperCase();
+      }
+
       // Get bindings
       const option1Key = hotkeyBindings?.mcOption1 || '1';
       const option2Key = hotkeyBindings?.mcOption2 || '2';
@@ -218,25 +225,25 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
       const options = card.options || [];
 
       // Handle option selection
-      if (event.key === option1Key && options.length > 0) {
+      if (key === option1Key && options.length > 0) {
         setSelectedOption(options[0]);
         return;
       }
-      if (event.key === option2Key && options.length > 1) {
+      if (key === option2Key && options.length > 1) {
         setSelectedOption(options[1]);
         return;
       }
-      if (event.key === option3Key && options.length > 2) {
+      if (key === option3Key && options.length > 2) {
         setSelectedOption(options[2]);
         return;
       }
-      if (event.key === option4Key && options.length > 3) {
+      if (key === option4Key && options.length > 3) {
         setSelectedOption(options[3]);
         return;
       }
 
       // Handle submit
-      if (event.key === submitKey && selectedOption) {
+      if (key === submitKey && selectedOption) {
         event.preventDefault();
         const isCorrect = selectedOption === card.back;
         Haptics.notificationAsync(
@@ -284,6 +291,39 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
     onAnswerSubmit?.(isCorrect);
   };
 
+  const handleImagePress = (imageUri: string) => {
+    setZoomedImage(imageUri);
+  };
+
+  const closeImageZoom = () => {
+    setZoomedImage(null);
+  };
+
+  // Image zoom modal
+  const renderImageZoomModal = () => (
+    <Modal
+      visible={!!zoomedImage}
+      transparent
+      animationType="fade"
+      onRequestClose={closeImageZoom}
+    >
+      <Pressable style={styles.zoomModalOverlay} onPress={closeImageZoom}>
+        <View style={styles.zoomModalContent}>
+          {zoomedImage && (
+            <Image
+              source={{ uri: zoomedImage }}
+              style={styles.zoomedImage}
+              resizeMode="contain"
+            />
+          )}
+          <TouchableOpacity style={styles.zoomCloseButton} onPress={closeImageZoom}>
+            <Ionicons name="close-circle" size={36} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+
   // Front card animation (question side)
   const frontAnimatedStyle = useAnimatedStyle(() => {
     const rotateY = interpolate(rotation.value, [0, 180], [0, 180]);
@@ -327,15 +367,21 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
           </View>
           <View style={styles.mcQuestionContent}>
             {card.frontImage && (
-              <Image
-                source={{ uri: card.frontImage }}
-                style={styles.mcQuestionImage}
-                resizeMode="contain"
-              />
+              <TouchableOpacity onPress={() => handleImagePress(card.frontImage!)} activeOpacity={0.8} style={styles.mcImageContainer}>
+                <Image
+                  source={{ uri: card.frontImage }}
+                  style={styles.mcQuestionImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.zoomHint}>
+                  <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
             )}
             <Text style={[styles.mcQuestionText, { color: textPrimary }]}>{card.front}</Text>
           </View>
         </View>
+        {renderImageZoomModal()}
 
         {/* Options */}
         <View style={styles.mcOptionsContainer}>
@@ -416,16 +462,22 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
         </View>
         <View style={styles.cardContent}>
           {card.frontImage && (
-            <Image
-              source={{ uri: card.frontImage }}
-              style={styles.cardImage}
-              resizeMode="contain"
-            />
+            <TouchableOpacity onPress={() => handleImagePress(card.frontImage!)} activeOpacity={0.8} style={styles.imageContainer}>
+              <Image
+                source={{ uri: card.frontImage }}
+                style={styles.cardImage}
+                resizeMode="contain"
+              />
+              <View style={styles.zoomHint}>
+                <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
           )}
-          <Text style={[styles.cardText, { color: textPrimary }, card.frontImage && { fontSize: typography.sizes.lg }]}>
+          <Text style={[styles.cardText, { color: textPrimary }, card.frontImage ? { fontSize: typography.sizes.lg } : undefined]}>
             {card.front}
           </Text>
         </View>
+        {renderImageZoomModal()}
         <View style={styles.flipHint}>
           <Ionicons name="refresh-outline" size={16} color={textSecondary} />
           <Text style={[styles.flipHintText, { color: textSecondary }]}>Tap to reveal answer</Text>
@@ -446,13 +498,18 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
         </View>
         <View style={styles.cardContent}>
           {card.backImage && (
-            <Image
-              source={{ uri: card.backImage }}
-              style={styles.cardImage}
-              resizeMode="contain"
-            />
+            <TouchableOpacity onPress={() => handleImagePress(card.backImage!)} activeOpacity={0.8} style={styles.imageContainer}>
+              <Image
+                source={{ uri: card.backImage }}
+                style={styles.cardImage}
+                resizeMode="contain"
+              />
+              <View style={styles.zoomHint}>
+                <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
           )}
-          <Text style={[styles.cardText, { color: textPrimary }, card.backImage && { fontSize: typography.sizes.lg }]}>
+          <Text style={[styles.cardText, { color: textPrimary }, card.backImage ? { fontSize: typography.sizes.lg } : undefined]}>
             {card.back}
           </Text>
         </View>
@@ -518,10 +575,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 36,
   },
+  imageContainer: {
+    width: '100%',
+    marginBottom: spacing[3],
+  },
   cardImage: {
     width: '100%',
-    height: 120,
-    marginBottom: spacing[3],
+    height: 200,
     borderRadius: borderRadius.md,
   },
   flipHint: {
@@ -549,10 +609,13 @@ const styles = StyleSheet.create({
   mcQuestionContent: {
     paddingVertical: spacing[4],
   },
+  mcImageContainer: {
+    width: '100%',
+    marginBottom: spacing[3],
+  },
   mcQuestionImage: {
     width: '100%',
-    height: 150,
-    marginBottom: spacing[3],
+    height: 220,
     borderRadius: borderRadius.md,
   },
   mcQuestionText: {
@@ -630,5 +693,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
+  },
+  // Image zoom modal styles
+  zoomModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomModalContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomedImage: {
+    width: '95%',
+    height: '85%',
+  },
+  zoomCloseButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    padding: spacing[2],
+  },
+  zoomHint: {
+    position: 'absolute',
+    bottom: spacing[2],
+    right: spacing[2],
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: borderRadius.full,
+    padding: spacing[1],
   },
 });

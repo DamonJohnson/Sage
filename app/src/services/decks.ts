@@ -4,6 +4,7 @@
  * Handles all deck and card CRUD operations with the backend API.
  */
 
+import { Platform } from 'react-native';
 import { apiRequest, APIResponse } from './api';
 import type { Deck, DeckWithStats, Card } from '@sage/shared';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -135,6 +136,7 @@ export async function addCardsAPI(
     backImage?: string | null;
     cardType?: 'flashcard' | 'multiple_choice';
     options?: string[] | null;
+    explanation?: string | null;
   }>
 ): Promise<APIResponse<Card[]>> {
   const response = await apiRequest<any[]>('POST', `/api/decks/${deckId}/cards`, { cards }, withUserHeader());
@@ -196,8 +198,6 @@ function transformDeckFromAPI(data: any): DeckWithStats {
     title: data.title,
     description: data.description || '',
     isPublic: Boolean(data.isPublic ?? data.is_public),
-    category: data.category || null,
-    tags: typeof data.tags === 'string' ? JSON.parse(data.tags) : (data.tags || []),
     cardCount: cardCount,
     downloadCount: data.downloadCount ?? data.download_count ?? 0,
     ratingSum: data.ratingSum ?? data.rating_sum ?? 0,
@@ -229,6 +229,7 @@ function transformCardFromAPI(data: any): Card {
     deckId: data.deck_id || data.deckId,
     front: data.front,
     back: data.back,
+    explanation: data.explanation || null,
     frontImage: data.front_image || data.frontImage || null,
     backImage: data.back_image || data.backImage || null,
     cardType: data.card_type || data.cardType || 'flashcard',
@@ -263,27 +264,91 @@ interface ApkgImportResult {
 /**
  * Import cards from an APKG file (Anki deck package)
  */
-export async function importApkgFile(fileUri: string): Promise<APIResponse<ApkgImportResult>> {
-  // Create form data for file upload
+export async function importApkgFile(fileUri: string, fileName?: string, webFile?: File): Promise<APIResponse<ApkgImportResult>> {
   const formData = new FormData();
-
-  // For React Native, we need to fetch the file and append it
-  // The fileUri could be a local file path or a content:// URI
-  const response = await fetch(fileUri);
-  const blob = await response.blob();
-
-  formData.append('file', blob, 'deck.apkg');
-
-  // Make API request with form data
   const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
-  const importResponse = await fetch(`${apiUrl}/api/import/apkg`, {
-    method: 'POST',
-    headers: {
-      'x-user-id': getUserId(),
-    },
-    body: formData,
-  });
 
-  const data = await importResponse.json();
-  return data;
+  try {
+    console.log('importApkgFile called:', { fileUri, fileName, hasWebFile: !!webFile, platform: Platform.OS });
+
+    // Handle different platforms
+    if (Platform.OS === 'web') {
+      if (webFile) {
+        // Use the File object directly if available
+        console.log('Using File object directly:', webFile.name, webFile.size, webFile.type);
+        formData.append('file', webFile, fileName || webFile.name);
+      } else {
+        // Fallback: fetch the blob from the URI
+        console.log('No File object, fetching from URI:', fileUri);
+        try {
+          const response = await fetch(fileUri);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch blob: ${response.status} ${response.statusText}`);
+          }
+          const blob = await response.blob();
+          console.log('Got blob:', blob.size, blob.type);
+          const file = new File([blob], fileName || 'deck.apkg', { type: 'application/zip' });
+          formData.append('file', file);
+        } catch (fetchError) {
+          console.error('Failed to fetch blob from URI:', fetchError);
+          return {
+            success: false,
+            error: `Failed to read file: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`,
+          };
+        }
+      }
+    } else {
+      // On native (iOS/Android), use the URI directly with React Native's FormData
+      console.log('Native platform, using URI directly');
+      formData.append('file', {
+        uri: fileUri,
+        name: fileName || 'deck.apkg',
+        type: 'application/zip',
+      } as any);
+    }
+
+    console.log('Uploading APKG file to:', `${apiUrl}/api/import/apkg`);
+
+    const importResponse = await fetch(`${apiUrl}/api/import/apkg`, {
+      method: 'POST',
+      headers: {
+        'x-user-id': getUserId(),
+      },
+      body: formData,
+    });
+
+    console.log('APKG import response status:', importResponse.status);
+
+    if (!importResponse.ok) {
+      const errorText = await importResponse.text();
+      console.error('APKG import error response:', errorText);
+      return {
+        success: false,
+        error: `Server error: ${importResponse.status} - ${errorText}`,
+      };
+    }
+
+    const data = await importResponse.json();
+    console.log('APKG import response:', data);
+    return data;
+  } catch (error) {
+    console.error('APKG import fetch error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to upload file',
+    };
+  }
+}
+
+export interface TextImportResult {
+  deckName: string;
+  cards: Array<{ front: string; back: string }>;
+  method: 'csv' | 'csv-fallback' | 'ai';
+}
+
+/**
+ * Import cards from text/CSV content using AI
+ */
+export async function importTextContent(content: string): Promise<APIResponse<TextImportResult>> {
+  return apiRequest<TextImportResult>('POST', '/api/import/text', { content });
 }

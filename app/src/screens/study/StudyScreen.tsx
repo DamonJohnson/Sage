@@ -7,6 +7,9 @@ import {
   SafeAreaView,
   Platform,
   Dimensions,
+  TextInput,
+  ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +21,22 @@ import Animated, {
 } from 'react-native-reanimated';
 import ConfettiCannon from 'react-native-confetti-cannon';
 
+// Safe haptics wrapper for web compatibility
+const safeHaptics = {
+  notificationAsync: (type: Haptics.NotificationFeedbackType) => {
+    if (Platform.OS !== 'web') {
+      return Haptics.notificationAsync(type);
+    }
+    return Promise.resolve();
+  },
+};
+
 import { StudyCard, RatingButtons } from '@/components/study';
 import { ProgressBar, GradientButton } from '@/components/ui';
 import { useDeckStore, useStudyStore, useAuthStore, getIntervalLabel } from '@/store';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useThemedColors } from '@/hooks/useThemedColors';
-import { playCelebrationSound } from '@/services';
+import { playCelebrationSound, explainConcept } from '@/services';
 import { spacing, typography, borderRadius, shadows } from '@/theme';
 import type { RootStackScreenProps } from '@/navigation/types';
 import type { Rating } from '@sage/shared';
@@ -35,13 +48,24 @@ export function StudyScreen() {
   const { isDesktop, isTablet, isMobile } = useResponsive();
   const { background, surface, textPrimary, textSecondary, accent, colors } = useThemedColors();
 
-  const { getDeck, getCards } = useDeckStore();
+  const { getDeck, getCards, loadCards } = useDeckStore();
   const { startSession, getCurrentCard, rateCard, nextCard, endSession, getProgress } =
     useStudyStore();
   const { settings } = useAuthStore();
 
   const deck = getDeck(deckId);
   const cards = getCards(deckId);
+  const [isLoadingCards, setIsLoadingCards] = useState(true);
+
+  // Load cards when screen mounts
+  useEffect(() => {
+    const fetchCards = async () => {
+      setIsLoadingCards(true);
+      await loadCards(deckId);
+      setIsLoadingCards(false);
+    };
+    fetchCards();
+  }, [deckId]);
 
   // Keyboard shortcuts settings (web only)
   const keyboardShortcuts = settings.keyboardShortcuts;
@@ -57,15 +81,31 @@ export function StudyScreen() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const confettiRef = useRef<ConfettiCannon>(null);
 
+  // Learn More feature state
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
+  const [explanationHistory, setExplanationHistory] = useState<
+    { role: 'user' | 'assistant'; content: string }[]
+  >([]);
+  const [followUpQuestion, setFollowUpQuestion] = useState('');
+  const explanationScrollRef = useRef<ScrollView>(null);
+
+  // Create Cards from concept state
+  const [showCreateCardsForm, setShowCreateCardsForm] = useState(false);
+  const [createCardsFocus, setCreateCardsFocus] = useState('General overview of this concept');
+  const [createCardsCount, setCreateCardsCount] = useState('3');
+  const [createCardsAddToExisting, setCreateCardsAddToExisting] = useState(true);
+  const [isGeneratingCards, setIsGeneratingCards] = useState(false);
+
   // Responsive values
   const containerMaxWidth = isDesktop ? 800 : isTablet ? 600 : '100%';
   const cardMaxWidth = isDesktop ? 600 : isTablet ? 500 : '100%';
 
   useEffect(() => {
-    if (cards.length > 0) {
+    if (!isLoadingCards && cards.length > 0) {
       startSession(deckId, cards);
     }
-  }, [deckId]);
+  }, [deckId, isLoadingCards, cards.length]);
 
   // Play celebration sound when session completes
   useEffect(() => {
@@ -95,13 +135,16 @@ export function StudyScreen() {
   };
 
   const handleRate = (rating: Rating) => {
-    Haptics.notificationAsync(
+    console.log('handleRate called with rating:', rating);
+
+    safeHaptics.notificationAsync(
       rating >= 3
         ? Haptics.NotificationFeedbackType.Success
         : Haptics.NotificationFeedbackType.Warning
     );
 
-    rateCard(rating);
+    // Fire and forget - don't block on API call
+    rateCard(rating).catch((err) => console.error('rateCard error:', err));
 
     setSessionStats((prev) => ({
       reviewed: prev.reviewed + 1,
@@ -110,12 +153,17 @@ export function StudyScreen() {
 
     // Check if there are more cards
     const hasMore = nextCard();
+    console.log('hasMore cards:', hasMore);
     if (!hasMore) {
       setShowComplete(true);
     } else {
       setIsFlipped(false);
       setMcAnswerSubmitted(false);
       setMcWasCorrect(false);
+      // Reset explanation state for new card
+      setShowExplanation(false);
+      setExplanationHistory([]);
+      setFollowUpQuestion('');
     }
   };
 
@@ -144,8 +192,11 @@ export function StudyScreen() {
       const easyKey = bindings?.rateEasy || '4';
       const closeKey = bindings?.closeStudy || 'Escape';
 
-      // Normalize key for comparison
-      const key = event.key === ' ' ? 'Space' : event.key;
+      // Normalize key for comparison (uppercase for consistency with stored bindings)
+      let key = event.key === ' ' ? 'Space' : event.key;
+      if (key.length === 1) {
+        key = key.toUpperCase();
+      }
 
       // Check if ratings are restricted due to wrong MC answer
       const isIncorrectMc = isMultipleChoice && mcAnswerSubmitted && !mcWasCorrect;
@@ -206,6 +257,149 @@ export function StudyScreen() {
       startSession(deckId, cards);
     }
   };
+
+  // Learn More handlers
+  const handleLearnMore = async () => {
+    if (!currentCard) return;
+
+    setShowExplanation(true);
+    setIsLoadingExplanation(true);
+    setExplanationHistory([]);
+
+    try {
+      const response = await explainConcept({
+        question: currentCard.card.front,
+        answer: currentCard.card.back,
+      });
+
+      if (response.success && response.data) {
+        setExplanationHistory([
+          { role: 'assistant', content: response.data.explanation },
+        ]);
+      } else {
+        setExplanationHistory([
+          { role: 'assistant', content: 'Sorry, I could not generate an explanation at this time. Please try again.' },
+        ]);
+      }
+    } catch (error) {
+      console.error('Error getting explanation:', error);
+      setExplanationHistory([
+        { role: 'assistant', content: 'An error occurred while getting the explanation. Please try again.' },
+      ]);
+    } finally {
+      setIsLoadingExplanation(false);
+    }
+  };
+
+  const handleFollowUpSubmit = async () => {
+    if (!followUpQuestion.trim() || !currentCard || isLoadingExplanation) return;
+
+    const userQuestion = followUpQuestion.trim();
+    setFollowUpQuestion('');
+    setExplanationHistory((prev) => [...prev, { role: 'user', content: userQuestion }]);
+    setIsLoadingExplanation(true);
+
+    // Scroll to bottom
+    setTimeout(() => {
+      explanationScrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    try {
+      const response = await explainConcept({
+        question: currentCard.card.front,
+        answer: currentCard.card.back,
+        followUpQuestion: userQuestion,
+      });
+
+      if (response.success && response.data) {
+        setExplanationHistory((prev) => [
+          ...prev,
+          { role: 'assistant', content: response.data!.explanation },
+        ]);
+      } else {
+        setExplanationHistory((prev) => [
+          ...prev,
+          { role: 'assistant', content: 'Sorry, I could not answer that question. Please try again.' },
+        ]);
+      }
+    } catch (error) {
+      console.error('Error getting follow-up answer:', error);
+      setExplanationHistory((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'An error occurred. Please try again.' },
+      ]);
+    } finally {
+      setIsLoadingExplanation(false);
+      setTimeout(() => {
+        explanationScrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  };
+
+  const handleCloseExplanation = () => {
+    setShowExplanation(false);
+    setExplanationHistory([]);
+    setFollowUpQuestion('');
+    setShowCreateCardsForm(false);
+    setCreateCardsFocus('General overview of this concept');
+    setCreateCardsCount('3');
+    setCreateCardsAddToExisting(true);
+  };
+
+  // Create Cards handlers
+  const CREATE_CARDS_FOCUS_CHIPS = [
+    'Key definitions and terms',
+    'Real-world examples',
+    'Common misconceptions',
+    'Step-by-step process',
+    'Comparisons and contrasts',
+  ];
+
+  const handleOpenCreateCardsForm = () => {
+    setShowCreateCardsForm(true);
+  };
+
+  const handleCreateCardsSubmit = async () => {
+    if (!currentCard || isGeneratingCards) return;
+
+    const count = parseInt(createCardsCount, 10) || 3;
+    if (count < 1 || count > 20) {
+      setToastMessage('Please enter a number between 1 and 20');
+      return;
+    }
+
+    setIsGeneratingCards(true);
+
+    try {
+      // Navigate to AddCardsPreview with the generation params
+      (navigation as any).navigate('AddCardsPreview', {
+        deckId: createCardsAddToExisting ? deckId : null,
+        sourceQuestion: currentCard.card.front,
+        sourceAnswer: currentCard.card.back,
+        focusArea: createCardsFocus,
+        cardCount: count,
+        createNewDeck: !createCardsAddToExisting,
+        deckTitle: deck?.title || 'New Deck',
+      });
+
+      // Close the modal
+      handleCloseExplanation();
+    } catch (error) {
+      console.error('Error navigating to create cards:', error);
+      setToastMessage('Failed to create cards. Please try again.');
+    } finally {
+      setIsGeneratingCards(false);
+    }
+  };
+
+  // Show loading state while cards are being fetched
+  if (isLoadingCards) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered, { backgroundColor: background }]}>
+        <Text style={[styles.emptyTitle, { color: textPrimary }]}>Loading cards...</Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!deck || cards.length === 0) {
     return (
@@ -391,23 +585,37 @@ export function StudyScreen() {
             {isDesktop && (
               <View style={styles.desktopRatingsContainer}>
                 {showRatingButtons ? (
-                  <Animated.View
-                    entering={SlideInDown.duration(300).springify()}
-                    style={[styles.ratingsWrapper, { width: cardMaxWidth }]}
-                  >
-                    <RatingButtons
-                      onRate={handleRate}
-                      intervals={intervals}
-                      mcWasCorrect={isMultipleChoice ? mcWasCorrect : undefined}
-                      showHotkeys={showHotkeys}
-                      hotkeyBindings={bindings ? {
-                        again: bindings.rateAgain,
-                        hard: bindings.rateHard,
-                        good: bindings.rateGood,
-                        easy: bindings.rateEasy,
-                      } : undefined}
-                    />
-                  </Animated.View>
+                  <>
+                    <Animated.View
+                      entering={SlideInDown.duration(300).springify()}
+                      style={[styles.ratingsWrapper, { width: cardMaxWidth }]}
+                    >
+                      <RatingButtons
+                        onRate={handleRate}
+                        intervals={intervals}
+                        mcWasCorrect={isMultipleChoice ? mcWasCorrect : undefined}
+                        showHotkeys={showHotkeys}
+                        hotkeyBindings={bindings ? {
+                          again: bindings.rateAgain,
+                          hard: bindings.rateHard,
+                          good: bindings.rateGood,
+                          easy: bindings.rateEasy,
+                        } : undefined}
+                      />
+                    </Animated.View>
+                    {/* Learn More button */}
+                    {!showExplanation && (
+                      <Animated.View entering={FadeIn.delay(200)}>
+                        <TouchableOpacity
+                          style={[styles.learnMoreButton, { borderColor: accent.orange }]}
+                          onPress={handleLearnMore}
+                        >
+                          <Ionicons name="bulb-outline" size={18} color={accent.orange} />
+                          <Text style={[styles.learnMoreText, { color: accent.orange }]}>Learn More</Text>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    )}
+                  </>
                 ) : (
                   /* Tap hint - shows when ratings not visible (only for flashcards) */
                   !isMultipleChoice && (
@@ -437,23 +645,37 @@ export function StudyScreen() {
         ]}>
           {/* Rating Buttons - at bottom on mobile */}
           {showRatingButtons && !isDesktop && (
-            <Animated.View
-              entering={SlideInDown.duration(300).springify()}
-              style={styles.ratingsWrapper}
-            >
-              <RatingButtons
-                onRate={handleRate}
-                intervals={intervals}
-                mcWasCorrect={isMultipleChoice ? mcWasCorrect : undefined}
-                showHotkeys={showHotkeys}
-                hotkeyBindings={bindings ? {
-                  again: bindings.rateAgain,
-                  hard: bindings.rateHard,
-                  good: bindings.rateGood,
-                  easy: bindings.rateEasy,
-                } : undefined}
-              />
-            </Animated.View>
+            <>
+              <Animated.View
+                entering={SlideInDown.duration(300).springify()}
+                style={styles.ratingsWrapper}
+              >
+                <RatingButtons
+                  onRate={handleRate}
+                  intervals={intervals}
+                  mcWasCorrect={isMultipleChoice ? mcWasCorrect : undefined}
+                  showHotkeys={showHotkeys}
+                  hotkeyBindings={bindings ? {
+                    again: bindings.rateAgain,
+                    hard: bindings.rateHard,
+                    good: bindings.rateGood,
+                    easy: bindings.rateEasy,
+                  } : undefined}
+                />
+              </Animated.View>
+              {/* Learn More button - mobile */}
+              {!showExplanation && (
+                <Animated.View entering={FadeIn.delay(200)} style={styles.learnMoreContainer}>
+                  <TouchableOpacity
+                    style={[styles.learnMoreButton, { borderColor: accent.orange }]}
+                    onPress={handleLearnMore}
+                  >
+                    <Ionicons name="bulb-outline" size={18} color={accent.orange} />
+                    <Text style={[styles.learnMoreText, { color: accent.orange }]}>Learn More</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+            </>
           )}
 
           {/* Tap hint - at bottom on mobile (only for flashcards) */}
@@ -479,6 +701,303 @@ export function StudyScreen() {
         >
           <Ionicons name="information-circle-outline" size={20} color={accent.orange} />
           <Text style={[styles.toastText, { color: textPrimary }]}>{toastMessage}</Text>
+        </Animated.View>
+      )}
+
+      {/* Explanation Panel */}
+      {showExplanation && (
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(200)}
+          style={[
+            styles.explanationOverlay,
+            { backgroundColor: 'rgba(0, 0, 0, 0.5)' },
+          ]}
+        >
+          <Animated.View
+            entering={SlideInDown.duration(300).springify()}
+            style={[
+              styles.explanationPanel,
+              {
+                backgroundColor: surface,
+                maxWidth: isDesktop ? 700 : isTablet ? 600 : '95%',
+              },
+            ]}
+          >
+            {/* Header */}
+            <View style={[styles.explanationHeader, { borderBottomColor: colors.border.light }]}>
+              <View style={styles.explanationHeaderLeft}>
+                <Ionicons name="bulb" size={22} color={accent.orange} />
+                <Text style={[styles.explanationTitle, { color: textPrimary }]}>Learn More</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.closeExplanationButton, { backgroundColor: background }]}
+                onPress={handleCloseExplanation}
+              >
+                <Ionicons name="close" size={20} color={textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Card context */}
+            <View style={[styles.cardContext, { backgroundColor: background }]}>
+              <Text style={[styles.cardContextLabel, { color: textSecondary }]}>Question</Text>
+              <Text style={[styles.cardContextText, { color: textPrimary }]} numberOfLines={3}>
+                {currentCard?.card.front}
+              </Text>
+              <View style={[styles.cardContextDivider, { backgroundColor: colors.border.light }]} />
+              <Text style={[styles.cardContextLabel, { color: textSecondary }]}>Answer</Text>
+              <Text style={[styles.cardContextText, { color: textPrimary }]} numberOfLines={3}>
+                {currentCard?.card.back}
+              </Text>
+            </View>
+
+            {showCreateCardsForm ? (
+              /* Create Cards Form */
+              <ScrollView
+                style={[
+                  styles.createCardsFormScroll,
+                  Platform.OS === 'web' && {
+                    // @ts-ignore - web-specific scrollbar styling
+                    scrollbarColor: `${colors.border.light} transparent`,
+                    scrollbarWidth: 'thin',
+                  },
+                ]}
+                contentContainerStyle={styles.createCardsFormContent}
+                indicatorStyle={background === '#191919' ? 'white' : 'black'}
+              >
+                <Text style={[styles.createCardsFormTitle, { color: textPrimary }]}>
+                  Create Cards from This Concept
+                </Text>
+                <Text style={[styles.createCardsFormSubtitle, { color: textSecondary }]}>
+                  Generate additional flashcards to reinforce your learning
+                </Text>
+
+                {/* Focus area */}
+                <Text style={[styles.createCardsLabel, { color: textSecondary }]}>What to focus on</Text>
+                <TextInput
+                  style={[
+                    styles.createCardsInput,
+                    { backgroundColor: background, color: textPrimary, borderColor: colors.border.light },
+                  ]}
+                  value={createCardsFocus}
+                  onChangeText={setCreateCardsFocus}
+                  placeholder="What aspect of this concept?"
+                  placeholderTextColor={textSecondary}
+                  multiline
+                  numberOfLines={2}
+                />
+                <View style={styles.createCardsChips}>
+                  {CREATE_CARDS_FOCUS_CHIPS.map((chip) => (
+                    <TouchableOpacity
+                      key={chip}
+                      style={[styles.createCardsChip, { backgroundColor: colors.border.light }]}
+                      onPress={() => setCreateCardsFocus(chip)}
+                    >
+                      <Text style={[styles.createCardsChipText, { color: textPrimary }]}>{chip}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Card count */}
+                <Text style={[styles.createCardsLabel, { color: textSecondary }]}>Number of cards</Text>
+                <TextInput
+                  style={[
+                    styles.createCardsCountInput,
+                    { backgroundColor: background, color: textPrimary, borderColor: colors.border.light },
+                  ]}
+                  value={createCardsCount}
+                  onChangeText={setCreateCardsCount}
+                  placeholder="3"
+                  placeholderTextColor={textSecondary}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+
+                {/* Add to existing or create new */}
+                <Text style={[styles.createCardsLabel, { color: textSecondary }]}>Destination</Text>
+                <View style={styles.createCardsToggleRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.createCardsToggle,
+                      { borderColor: colors.border.light },
+                      createCardsAddToExisting && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+                    ]}
+                    onPress={() => setCreateCardsAddToExisting(true)}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={18}
+                      color={createCardsAddToExisting ? accent.orange : textSecondary}
+                    />
+                    <Text style={[
+                      styles.createCardsToggleText,
+                      { color: createCardsAddToExisting ? accent.orange : textPrimary },
+                    ]}>
+                      Add to "{deck?.title}"
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.createCardsToggle,
+                      { borderColor: colors.border.light },
+                      !createCardsAddToExisting && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+                    ]}
+                    onPress={() => setCreateCardsAddToExisting(false)}
+                  >
+                    <Ionicons
+                      name="folder-outline"
+                      size={18}
+                      color={!createCardsAddToExisting ? accent.orange : textSecondary}
+                    />
+                    <Text style={[
+                      styles.createCardsToggleText,
+                      { color: !createCardsAddToExisting ? accent.orange : textPrimary },
+                    ]}>
+                      Create new deck
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Actions */}
+                <View style={styles.createCardsActions}>
+                  <TouchableOpacity
+                    style={[styles.createCardsBackBtn, { borderColor: colors.border.light }]}
+                    onPress={() => setShowCreateCardsForm(false)}
+                  >
+                    <Text style={[styles.createCardsBackText, { color: textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.createCardsSubmitBtn,
+                      { backgroundColor: accent.green },
+                      isGeneratingCards && { opacity: 0.6 },
+                    ]}
+                    onPress={handleCreateCardsSubmit}
+                    disabled={isGeneratingCards}
+                  >
+                    {isGeneratingCards ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="sparkles" size={18} color="#fff" />
+                        <Text style={styles.createCardsSubmitText}>Generate Cards</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            ) : (
+              <>
+                {/* Conversation */}
+                <ScrollView
+                  ref={explanationScrollRef}
+                  style={[
+                    styles.explanationScroll,
+                    Platform.OS === 'web' && {
+                      // @ts-ignore - web-specific scrollbar styling
+                      scrollbarColor: `${colors.border.light} transparent`,
+                      scrollbarWidth: 'thin',
+                    },
+                  ]}
+                  contentContainerStyle={styles.explanationContent}
+                  showsVerticalScrollIndicator={true}
+                  indicatorStyle={background === '#191919' ? 'white' : 'black'}
+                >
+                  {explanationHistory.map((message, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.messageContainer,
+                        message.role === 'user' && styles.userMessageContainer,
+                      ]}
+                    >
+                      {message.role === 'user' ? (
+                        <View style={[styles.userMessage, { backgroundColor: accent.orange }]}>
+                          <Text style={styles.userMessageText}>{message.content}</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.assistantMessage}>
+                          <Ionicons name="sparkles" size={16} color={accent.orange} style={styles.messageIcon} />
+                          <Text style={[styles.assistantMessageText, { color: textPrimary }]}>
+                            {message.content}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+
+                  {isLoadingExplanation && (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="small" color={accent.orange} />
+                      <Text style={[styles.loadingText, { color: textSecondary }]}>
+                        {explanationHistory.length === 0 ? 'Getting explanation...' : 'Thinking...'}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Create Cards Button - inside scroll after explanation */}
+                  {explanationHistory.length > 0 && !isLoadingExplanation && (
+                    <TouchableOpacity
+                      style={[styles.createCardsButton, { backgroundColor: accent.orange + '15', borderColor: accent.orange }]}
+                      onPress={handleOpenCreateCardsForm}
+                    >
+                      <Ionicons name="add-circle-outline" size={20} color={accent.orange} />
+                      <Text style={[styles.createCardsButtonText, { color: accent.orange }]}>
+                        Create Cards on This Concept
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+
+                {/* Follow-up input */}
+                <View style={[styles.followUpContainer, { borderTopColor: colors.border.light }]}>
+                  <TextInput
+                    style={[
+                      styles.followUpInput,
+                      {
+                        backgroundColor: background,
+                        color: textPrimary,
+                        borderColor: colors.border.light,
+                      },
+                    ]}
+                    placeholder="Ask a follow-up question..."
+                    placeholderTextColor={textSecondary}
+                    value={followUpQuestion}
+                    onChangeText={setFollowUpQuestion}
+                    onSubmitEditing={handleFollowUpSubmit}
+                    onKeyPress={(e: any) => {
+                      if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                        e.preventDefault();
+                        handleFollowUpSubmit();
+                      }
+                    }}
+                    returnKeyType="send"
+                    blurOnSubmit={false}
+                    multiline={false}
+                    editable={!isLoadingExplanation}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.sendButton,
+                      {
+                        backgroundColor: followUpQuestion.trim() && !isLoadingExplanation
+                          ? accent.orange
+                          : colors.border.light,
+                      },
+                    ]}
+                    onPress={handleFollowUpSubmit}
+                    disabled={!followUpQuestion.trim() || isLoadingExplanation}
+                  >
+                    <Ionicons
+                      name="send"
+                      size={18}
+                      color={followUpQuestion.trim() && !isLoadingExplanation ? '#fff' : textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </Animated.View>
         </Animated.View>
       )}
     </SafeAreaView>
@@ -670,5 +1189,276 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.sizes.sm,
     lineHeight: typography.sizes.sm * 1.4,
+  },
+  // Learn More styles
+  learnMoreContainer: {
+    alignItems: 'center',
+    marginTop: spacing[3],
+  },
+  learnMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    gap: spacing[2],
+    marginTop: spacing[3],
+  },
+  learnMoreText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '500',
+  },
+  explanationOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  explanationPanel: {
+    width: '100%',
+    maxHeight: '90%',
+    minHeight: 500,
+    borderRadius: borderRadius['2xl'],
+    overflow: 'hidden',
+    ...shadows.xl,
+  },
+  explanationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+  },
+  explanationHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  explanationTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: '600',
+  },
+  closeExplanationButton: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardContext: {
+    margin: spacing[4],
+    marginBottom: 0,
+    padding: spacing[4],
+    borderRadius: borderRadius.lg,
+  },
+  cardContextLabel: {
+    fontSize: typography.sizes.xs,
+    fontWeight: '600',
+    marginBottom: spacing[1],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  cardContextText: {
+    fontSize: typography.sizes.base,
+    lineHeight: typography.sizes.base * 1.5,
+  },
+  cardContextDivider: {
+    height: 1,
+    marginVertical: spacing[3],
+  },
+  explanationScroll: {
+    flex: 1,
+    minHeight: 250,
+    maxHeight: 450,
+  },
+  explanationContent: {
+    padding: spacing[4],
+    gap: spacing[4],
+  },
+  messageContainer: {
+    alignItems: 'flex-start',
+  },
+  userMessageContainer: {
+    alignItems: 'flex-end',
+  },
+  userMessage: {
+    maxWidth: '85%',
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderRadius: borderRadius.xl,
+    borderBottomRightRadius: spacing[1],
+  },
+  userMessageText: {
+    fontSize: typography.sizes.sm,
+    color: '#fff',
+    lineHeight: typography.sizes.sm * 1.4,
+  },
+  assistantMessage: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[2],
+    maxWidth: '95%',
+  },
+  messageIcon: {
+    marginTop: 2,
+  },
+  assistantMessageText: {
+    flex: 1,
+    fontSize: typography.sizes.base,
+    lineHeight: typography.sizes.base * 1.7,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[2],
+  },
+  loadingText: {
+    fontSize: typography.sizes.sm,
+  },
+  followUpContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[4],
+    gap: spacing[3],
+    borderTopWidth: 1,
+  },
+  followUpInput: {
+    flex: 1,
+    height: 44,
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    fontSize: typography.sizes.sm,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Create Cards Button
+  createCardsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    marginTop: spacing[4],
+  },
+  createCardsButtonText: {
+    fontSize: typography.sizes.base,
+    fontWeight: '500',
+  },
+  // Create Cards Form
+  createCardsFormScroll: {
+    flex: 1,
+  },
+  createCardsFormContent: {
+    padding: spacing[4],
+  },
+  createCardsFormTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: '600',
+    marginBottom: spacing[1],
+  },
+  createCardsFormSubtitle: {
+    fontSize: typography.sizes.sm,
+    marginBottom: spacing[5],
+  },
+  createCardsLabel: {
+    fontSize: typography.sizes.xs,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing[2],
+    marginTop: spacing[4],
+  },
+  createCardsInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing[3],
+    fontSize: typography.sizes.base,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  createCardsCountInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing[3],
+    fontSize: typography.sizes.base,
+    width: 80,
+  },
+  createCardsChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  createCardsChip: {
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderRadius: borderRadius.full,
+  },
+  createCardsChipText: {
+    fontSize: typography.sizes.sm,
+  },
+  createCardsToggleRow: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  createCardsToggle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[3],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  createCardsToggleText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '500',
+  },
+  createCardsActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing[3],
+    marginTop: spacing[6],
+  },
+  createCardsBackBtn: {
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[5],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  createCardsBackText: {
+    fontSize: typography.sizes.base,
+    fontWeight: '500',
+  },
+  createCardsSubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[5],
+    borderRadius: borderRadius.lg,
+  },
+  createCardsSubmitText: {
+    color: '#fff',
+    fontSize: typography.sizes.base,
+    fontWeight: '600',
   },
 });

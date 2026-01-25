@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useThemedColors } from '@/hooks/useThemedColors';
 import { borderRadius, spacing, typography, shadows } from '@/theme';
@@ -101,7 +101,7 @@ function RatingButton({
           <View style={[styles.tooltipArrow, { borderTopColor: surface }]} />
         </View>
       )}
-      <Pressable
+      <TouchableOpacity
         style={[
           styles.button,
           { backgroundColor: dynamicBgColor },
@@ -109,14 +109,13 @@ function RatingButton({
           restrictedDisabled && styles.buttonRestricted,
           Platform.OS === 'web' && {
             cursor: isButtonDisabled ? 'not-allowed' : 'pointer',
-            transition: 'background-color 150ms ease, transform 150ms ease, opacity 150ms ease',
-            transform: isPressed ? [{ scale: 0.95 }] : [{ scale: 1 }],
           } as any,
         ]}
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         disabled={isButtonDisabled}
+        activeOpacity={0.7}
       >
         {/* Hotkey hint badge - pointerEvents: 'none' to not intercept clicks */}
         {hotkey && Platform.OS === 'web' && (
@@ -130,7 +129,7 @@ function RatingButton({
         <Text style={[styles.buttonInterval, { color }, restrictedDisabled && styles.textRestricted]}>
           {interval}
         </Text>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 }

@@ -176,7 +176,7 @@ export function ReviewSettingsModal({ visible, onClose }: ReviewSettingsModalPro
   const webButtonStyle = Platform.OS === 'web' ? {
     cursor: 'pointer' as const,
     transition: 'background-color 150ms ease, transform 150ms ease',
-  } : {};
+  } as any : {};
 
   const toggleInfo = (key: string) => {
     Haptics.selectionAsync();

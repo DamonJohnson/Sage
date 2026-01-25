@@ -349,7 +349,7 @@ export function PublicDeckPreviewScreen() {
             <View style={styles.authorInfo}>
               <Text style={[styles.authorName, styles.authorNameLink, { color: accent.blue }]}>{deck.authorName}</Text>
               <Text style={[styles.authorMeta, { color: textSecondary }]}>
-                {deck.category} • Updated recently
+                Updated recently
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={14} color={accent.blue} />
@@ -358,15 +358,6 @@ export function PublicDeckPreviewScreen() {
           {/* Title & Description */}
           <Text style={[styles.deckTitle, { color: textPrimary }]}>{deck.title}</Text>
           <Text style={[styles.deckDescription, { color: textSecondary }]}>{deck.description}</Text>
-
-          {/* Tags */}
-          <View style={styles.tagsRow}>
-            {deck.tags.map((tag) => (
-              <View key={tag} style={[styles.tag, { backgroundColor: surfaceHover }]}>
-                <Text style={[styles.tagText, { color: textSecondary }]}>{tag}</Text>
-              </View>
-            ))}
-          </View>
 
           {/* Stats Row */}
           <View style={[styles.statsRow, { borderTopColor: border }]}>
