@@ -30,8 +30,8 @@ router.post('/:deckId/cards', (req: Request, res: Response) => {
     let position = (maxPos.max || 0) + 1;
 
     const insertCard = db.prepare(`
-      INSERT INTO cards (id, deck_id, front, back, front_image, back_image, card_type, options, explanation, position, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      INSERT INTO cards (id, deck_id, front, back, front_image, back_image, card_type, options, explanation, cloze_index, position, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     `);
 
     const insertMany = db.transaction((cardsToInsert: any[]) => {
@@ -48,6 +48,7 @@ router.post('/:deckId/cards', (req: Request, res: Response) => {
           card.cardType || 'flashcard',
           card.options ? JSON.stringify(card.options) : null,
           card.explanation || null,
+          card.clozeIndex || null,
           position++
         );
         createdCards.push({
@@ -60,6 +61,7 @@ router.post('/:deckId/cards', (req: Request, res: Response) => {
           cardType: card.cardType || 'flashcard',
           options: card.options || null,
           explanation: card.explanation || null,
+          clozeIndex: card.clozeIndex || null,
           position: position - 1,
         });
       }
@@ -104,7 +106,7 @@ router.get('/:deckId/cards', (req: Request, res: Response) => {
 router.put('/:deckId/cards/:cardId', (req: Request, res: Response) => {
   const userId = getUserId(req);
   const { deckId, cardId } = req.params;
-  const { front, back, frontImage, backImage, cardType, options, explanation } = req.body;
+  const { front, back, frontImage, backImage, cardType, options, explanation, clozeIndex } = req.body;
 
   try {
     // Verify deck ownership
@@ -122,6 +124,7 @@ router.put('/:deckId/cards/:cardId', (req: Request, res: Response) => {
         card_type = COALESCE(?, card_type),
         options = COALESCE(?, options),
         explanation = ?,
+        cloze_index = ?,
         updated_at = datetime('now')
       WHERE id = ? AND deck_id = ?
     `).run(
@@ -132,6 +135,7 @@ router.put('/:deckId/cards/:cardId', (req: Request, res: Response) => {
       cardType,
       options ? JSON.stringify(options) : null,
       explanation !== undefined ? explanation : null,
+      clozeIndex !== undefined ? clozeIndex : null,
       cardId,
       deckId
     );
@@ -149,6 +153,7 @@ router.put('/:deckId/cards/:cardId', (req: Request, res: Response) => {
         cardType: card.card_type,
         options: card.options ? JSON.parse(card.options) : null,
         explanation: card.explanation || null,
+        clozeIndex: card.cloze_index || null,
         position: card.position,
         createdAt: card.created_at,
         updatedAt: card.updated_at,

@@ -9,6 +9,9 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Image,
+  Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -29,6 +32,10 @@ type ImportStep = 'select' | 'input' | 'processing' | 'preview' | 'complete';
 interface ImportedCard {
   front: string;
   back: string;
+  frontImage?: string | null;
+  backImage?: string | null;
+  cardType?: 'flashcard' | 'cloze' | 'multiple_choice';
+  clozeIndex?: number | null;
   selected: boolean;
 }
 
@@ -55,11 +62,15 @@ export function CreateImportScreen() {
   const [deckTitle, setDeckTitle] = useState('');
   const [deckDescription, setDeckDescription] = useState('');
   const [importedCards, setImportedCards] = useState<ImportedCard[]>([]);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingFront, setEditingFront] = useState('');
+  const [editingBack, setEditingBack] = useState('');
 
   const containerMaxWidth = isDesktop ? 800 : isTablet ? 600 : '100%';
   const contentPadding = isDesktop ? spacing[8] : isTablet ? spacing[6] : spacing[4];
 
   const [apkgFile, setApkgFile] = useState<{ uri: string; name: string; file?: File; blob?: Blob } | null>(null);
+  const [textFile, setTextFile] = useState<{ uri: string; name: string; file?: File; blob?: Blob } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Show error in both UI and alert
@@ -160,6 +171,65 @@ export function CreateImportScreen() {
     }
   };
 
+  const handleTextFilePick = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: Platform.OS === 'web' ? '*/*' : ['text/plain', 'text/csv', 'text/tab-separated-values', 'application/csv'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const pickedFile = result.assets[0];
+      const fileName = pickedFile.name.toLowerCase();
+
+      // Validate file type
+      if (!fileName.endsWith('.csv') && !fileName.endsWith('.tsv') && !fileName.endsWith('.txt')) {
+        showError('Invalid File', 'Please select a .csv, .tsv, or .txt file');
+        return;
+      }
+
+      console.log('Text file picked:', {
+        name: pickedFile.name,
+        uri: pickedFile.uri,
+        size: (pickedFile as any).size,
+      });
+
+      // Read file content
+      let fileContent = '';
+
+      if (Platform.OS === 'web') {
+        const webFile = (pickedFile as any).file as File | undefined;
+
+        if (webFile) {
+          fileContent = await webFile.text();
+        } else {
+          // Fetch from blob URI
+          const response = await fetch(pickedFile.uri);
+          fileContent = await response.text();
+        }
+      } else {
+        // Native: fetch from URI
+        const response = await fetch(pickedFile.uri);
+        fileContent = await response.text();
+      }
+
+      if (!fileContent.trim()) {
+        showError('Empty File', 'The selected file is empty');
+        return;
+      }
+
+      setTextFile({ uri: pickedFile.uri, name: pickedFile.name });
+      setInputValue(fileContent);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('Error picking text file:', error);
+      showError('Error', 'Failed to read file. Please try again.');
+    }
+  };
+
   const handleImport = async () => {
     // Clear any previous errors
     setErrorMessage(null);
@@ -196,9 +266,13 @@ export function CreateImportScreen() {
             return;
           }
           setDeckTitle(deckName || 'Imported Deck');
-          setImportedCards(cards.map((card: { front: string; back: string }) => ({
+          setImportedCards(cards.map((card: { front: string; back: string; frontImage?: string | null; backImage?: string | null; cardType?: string; clozeIndex?: number | null }) => ({
             front: card.front,
             back: card.back,
+            frontImage: card.frontImage || null,
+            backImage: card.backImage || null,
+            cardType: (card.cardType as 'flashcard' | 'cloze' | 'multiple_choice') || 'flashcard',
+            clozeIndex: card.clozeIndex || null,
             selected: true,
           })));
           setStep('preview');
@@ -254,6 +328,35 @@ export function CreateImportScreen() {
     ));
   };
 
+  const startEditingCard = (index: number) => {
+    const card = importedCards[index];
+    setEditingIndex(index);
+    setEditingFront(card.front);
+    setEditingBack(card.back);
+  };
+
+  const saveEditedCard = () => {
+    if (editingIndex === null) return;
+    setImportedCards(prev => prev.map((card, i) =>
+      i === editingIndex ? { ...card, front: editingFront, back: editingBack } : card
+    ));
+    setEditingIndex(null);
+    setEditingFront('');
+    setEditingBack('');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const cancelEditing = () => {
+    setEditingIndex(null);
+    setEditingFront('');
+    setEditingBack('');
+  };
+
+  const deleteCard = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setImportedCards(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleCreateDeck = async () => {
     const selectedCards = importedCards.filter(c => c.selected);
     if (selectedCards.length === 0) {
@@ -289,8 +392,12 @@ export function CreateImportScreen() {
     const cardsToAdd = selectedCards.map(card => ({
       front: card.front,
       back: card.back,
-      cardType: 'flashcard' as const,
+      frontImage: card.frontImage || null,
+      backImage: card.backImage || null,
+      cardType: card.cardType || 'flashcard',
+      clozeIndex: card.clozeIndex || null,
       options: null,
+      explanation: null,
     }));
 
     await addCards(deckId, cardsToAdd);
@@ -440,20 +547,59 @@ export function CreateImportScreen() {
             )}
           </TouchableOpacity>
         ) : (
-          <TextInput
-            style={[
-              styles.textInput,
-              { backgroundColor: surface, color: textPrimary, borderColor: border },
-              source === 'csv' && styles.textInputMultiline,
-            ]}
-            placeholder={selectedSource?.inputPlaceholder}
-            placeholderTextColor={textSecondary}
-            value={inputValue}
-            onChangeText={setInputValue}
-            multiline={source === 'csv'}
-            numberOfLines={source === 'csv' ? 8 : 1}
-            textAlignVertical={source === 'csv' ? 'top' : 'center'}
-          />
+          <>
+            {/* File upload option for CSV/Text */}
+            <TouchableOpacity
+              style={[styles.fileInput, { backgroundColor: surface, borderColor: textFile ? accent.purple : border, marginBottom: spacing[3] }]}
+              onPress={handleTextFilePick}
+            >
+              <Ionicons name={textFile ? 'document-text' : 'cloud-upload-outline'} size={24} color={textFile ? accent.purple : textSecondary} />
+              <Text style={[styles.fileInputText, { color: textFile ? textPrimary : textSecondary }]}>
+                {textFile?.name || 'Upload a .csv, .tsv, or .txt file'}
+              </Text>
+              {textFile && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setTextFile(null);
+                    setInputValue('');
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close-circle" size={22} color={textSecondary} />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+
+            {/* Divider with "or" */}
+            <View style={styles.orDivider}>
+              <View style={[styles.orDividerLine, { backgroundColor: border }]} />
+              <Text style={[styles.orDividerText, { color: textSecondary }]}>or paste content</Text>
+              <View style={[styles.orDividerLine, { backgroundColor: border }]} />
+            </View>
+
+            {/* Text input */}
+            <TextInput
+              style={[
+                styles.textInput,
+                { backgroundColor: surface, color: textPrimary, borderColor: border },
+                source === 'csv' && styles.textInputMultiline,
+              ]}
+              placeholder={selectedSource?.inputPlaceholder}
+              placeholderTextColor={textSecondary}
+              value={inputValue}
+              onChangeText={(text) => {
+                setInputValue(text);
+                // Clear file reference if user starts typing
+                if (textFile && text !== inputValue) {
+                  setTextFile(null);
+                }
+              }}
+              multiline={source === 'csv'}
+              numberOfLines={source === 'csv' ? 8 : 1}
+              textAlignVertical={source === 'csv' ? 'top' : 'center'}
+            />
+          </>
         )}
       </View>
 
@@ -498,55 +644,76 @@ export function CreateImportScreen() {
 
   const renderPreview = () => {
     const selectedCount = importedCards.filter(c => c.selected).length;
+    const clozeCount = importedCards.filter(c => c.cardType === 'cloze').length;
+    const flashcardCount = importedCards.filter(c => c.cardType !== 'cloze').length;
 
     return (
       <View style={styles.previewContainer}>
-        <View style={[styles.successBanner, { backgroundColor: accent.green + '15' }]}>
-          <Ionicons name="checkmark-circle" size={24} color={accent.green} />
-          <Text style={[styles.successText, { color: accent.green }]}>
-            {importedCards.length} cards found!
+        {/* Top action bar with save button */}
+        <View style={[styles.topActionBar, { backgroundColor: surface, borderBottomColor: border }]}>
+          <Text style={[styles.selectedCount, { color: textSecondary }]}>
+            {selectedCount} of {importedCards.length} selected
           </Text>
+          <TouchableOpacity
+            style={[styles.createButton, { backgroundColor: accent.orange }]}
+            onPress={handleCreateDeck}
+          >
+            <Ionicons name="save-outline" size={18} color="#fff" style={{ marginRight: spacing[1] }} />
+            <Text style={styles.createButtonText}>Save Deck</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.deckTitleSection}>
-          <Text style={[styles.inputLabel, { color: textSecondary }]}>Deck Title</Text>
-          <TextInput
-            style={[styles.textInput, { backgroundColor: surface, color: textPrimary, borderColor: border }]}
-            value={deckTitle}
-            onChangeText={setDeckTitle}
-            placeholder="Enter deck title"
-            placeholderTextColor={textSecondary}
-          />
-        </View>
+        <ScrollView style={styles.previewScrollView} showsVerticalScrollIndicator={true}>
+          <View style={[styles.successBanner, { backgroundColor: accent.green + '15' }]}>
+            <Ionicons name="checkmark-circle" size={24} color={accent.green} />
+            <View>
+              <Text style={[styles.successText, { color: accent.green }]}>
+                {importedCards.length} cards found!
+              </Text>
+              {clozeCount > 0 && (
+                <Text style={[styles.successSubtext, { color: accent.green }]}>
+                  {flashcardCount} flashcards, {clozeCount} cloze deletions
+                </Text>
+              )}
+            </View>
+          </View>
 
-        <View style={styles.deckTitleSection}>
-          <Text style={[styles.inputLabel, { color: textSecondary }]}>Description</Text>
-          <TextInput
-            style={[styles.textInput, { backgroundColor: surface, color: textPrimary, borderColor: border }]}
-            value={deckDescription}
-            onChangeText={setDeckDescription}
-            placeholder="Brief description of the deck"
-            placeholderTextColor={textSecondary}
-          />
-        </View>
+          <View style={styles.deckTitleSection}>
+            <Text style={[styles.inputLabel, { color: textSecondary }]}>Deck Title</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: surface, color: textPrimary, borderColor: border }]}
+              value={deckTitle}
+              onChangeText={setDeckTitle}
+              placeholder="Enter deck title"
+              placeholderTextColor={textSecondary}
+            />
+          </View>
 
-        <Text style={[styles.previewTitle, { color: textPrimary }]}>Preview Cards</Text>
-        <Text style={[styles.previewSubtitle, { color: textSecondary }]}>
-          Tap to include or exclude cards
-        </Text>
+          <View style={styles.deckTitleSection}>
+            <Text style={[styles.inputLabel, { color: textSecondary }]}>Description</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: surface, color: textPrimary, borderColor: border }]}
+              value={deckDescription}
+              onChangeText={setDeckDescription}
+              placeholder="Brief description of the deck"
+              placeholderTextColor={textSecondary}
+            />
+          </View>
 
-        <ScrollView style={styles.cardsScrollView} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.previewTitle, { color: textPrimary }]}>Preview Cards</Text>
+          <Text style={[styles.previewSubtitle, { color: textSecondary }]}>
+            Tap checkbox to select, tap edit to modify
+          </Text>
+
           {importedCards.map((card, index) => (
-            <TouchableOpacity
+            <View
               key={index}
               style={[
                 styles.cardPreview,
                 { backgroundColor: surface, borderColor: card.selected ? accent.orange : border },
               ]}
-              onPress={() => toggleCard(index)}
-              activeOpacity={0.7}
             >
-              <View style={styles.cardCheckbox}>
+              <TouchableOpacity style={styles.cardCheckbox} onPress={() => toggleCard(index)}>
                 <View
                   style={[
                     styles.checkbox,
@@ -558,30 +725,122 @@ export function CreateImportScreen() {
                 >
                   {card.selected && <Ionicons name="checkmark" size={14} color="#fff" />}
                 </View>
-              </View>
+              </TouchableOpacity>
               <View style={styles.cardPreviewContent}>
-                <Text style={[styles.cardFront, { color: textPrimary }]} numberOfLines={2}>
-                  {card.front}
+                {/* Card type badge */}
+                {card.cardType === 'cloze' && (
+                  <View style={[styles.cardTypeBadge, { backgroundColor: accent.purple + '20' }]}>
+                    <Text style={[styles.cardTypeBadgeText, { color: accent.purple }]}>Cloze</Text>
+                  </View>
+                )}
+                {card.frontImage && (
+                  <Image source={{ uri: card.frontImage }} style={styles.cardPreviewImage} resizeMode="contain" />
+                )}
+                <Text style={[styles.cardFront, { color: textPrimary }]} numberOfLines={3}>
+                  {card.front || (card.frontImage ? '[Image]' : '')}
                 </Text>
-                <Text style={[styles.cardBack, { color: textSecondary }]} numberOfLines={2}>
-                  {card.back}
+                {card.backImage && (
+                  <Image source={{ uri: card.backImage }} style={styles.cardPreviewImageSmall} resizeMode="contain" />
+                )}
+                <Text style={[styles.cardBack, { color: textSecondary }]} numberOfLines={3}>
+                  {card.cardType === 'cloze' ? `Answer: ${card.back}` : card.back || (card.backImage ? '[Image]' : '')}
                 </Text>
               </View>
-            </TouchableOpacity>
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  style={[styles.cardActionButton, { backgroundColor: accent.blue + '20' }]}
+                  onPress={() => startEditingCard(index)}
+                >
+                  <Ionicons name="pencil" size={16} color={accent.blue} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.cardActionButton, { backgroundColor: accent.red + '20' }]}
+                  onPress={() => deleteCard(index)}
+                >
+                  <Ionicons name="trash-outline" size={16} color={accent.red} />
+                </TouchableOpacity>
+              </View>
+            </View>
           ))}
+
+          {/* Spacer for bottom */}
+          <View style={{ height: spacing[8] }} />
         </ScrollView>
 
-        <View style={[styles.bottomBar, { backgroundColor: surface, borderTopColor: border }]}>
-          <Text style={[styles.selectedCount, { color: textSecondary }]}>
-            {selectedCount} of {importedCards.length} selected
-          </Text>
-          <TouchableOpacity
-            style={[styles.createButton, { backgroundColor: accent.orange }]}
-            onPress={handleCreateDeck}
+        {/* Edit Card Modal */}
+        <Modal
+          visible={editingIndex !== null}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={cancelEditing}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
           >
-            <Text style={styles.createButtonText}>Create Deck</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={[styles.editModal, { backgroundColor: surface }]}>
+              <View style={[styles.editModalHeader, { borderBottomColor: border }]}>
+                <Text style={[styles.editModalTitle, { color: textPrimary }]}>Edit Card</Text>
+                <TouchableOpacity onPress={cancelEditing}>
+                  <Ionicons name="close" size={24} color={textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.editModalContent}>
+                {editingIndex !== null && importedCards[editingIndex]?.frontImage && (
+                  <Image
+                    source={{ uri: importedCards[editingIndex].frontImage! }}
+                    style={styles.editModalImage}
+                    resizeMode="contain"
+                  />
+                )}
+                <Text style={[styles.inputLabel, { color: textSecondary }]}>Front (Question)</Text>
+                <TextInput
+                  style={[styles.editTextInput, { backgroundColor: background, color: textPrimary, borderColor: border }]}
+                  value={editingFront}
+                  onChangeText={setEditingFront}
+                  placeholder="Enter the question or front of card"
+                  placeholderTextColor={textSecondary}
+                  multiline
+                  numberOfLines={4}
+                />
+
+                {editingIndex !== null && importedCards[editingIndex]?.backImage && (
+                  <Image
+                    source={{ uri: importedCards[editingIndex].backImage! }}
+                    style={styles.editModalImage}
+                    resizeMode="contain"
+                  />
+                )}
+                <Text style={[styles.inputLabel, { color: textSecondary, marginTop: spacing[4] }]}>Back (Answer)</Text>
+                <TextInput
+                  style={[styles.editTextInput, { backgroundColor: background, color: textPrimary, borderColor: border }]}
+                  value={editingBack}
+                  onChangeText={setEditingBack}
+                  placeholder="Enter the answer or back of card"
+                  placeholderTextColor={textSecondary}
+                  multiline
+                  numberOfLines={4}
+                />
+              </ScrollView>
+
+              <View style={[styles.editModalFooter, { borderTopColor: border }]}>
+                <TouchableOpacity
+                  style={[styles.editModalButton, { backgroundColor: border }]}
+                  onPress={cancelEditing}
+                >
+                  <Text style={[styles.editModalButtonText, { color: textPrimary }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.editModalButton, { backgroundColor: accent.orange }]}
+                  onPress={saveEditedCard}
+                >
+                  <Text style={[styles.editModalButtonText, { color: '#fff' }]}>Save Changes</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     );
   };
@@ -781,6 +1040,19 @@ const styles = StyleSheet.create({
     minHeight: 160,
     paddingTop: spacing[4],
   },
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing[3],
+  },
+  orDividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  orDividerText: {
+    paddingHorizontal: spacing[3],
+    fontSize: typography.sizes.sm,
+  },
   fileInput: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -871,6 +1143,11 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     marginLeft: spacing[2],
   },
+  successSubtext: {
+    fontSize: typography.sizes.sm,
+    marginLeft: spacing[2],
+    marginTop: 2,
+  },
   deckTitleSection: {
     marginBottom: spacing[6],
   },
@@ -910,6 +1187,31 @@ const styles = StyleSheet.create({
   cardPreviewContent: {
     flex: 1,
   },
+  cardTypeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing[1],
+  },
+  cardTypeBadgeText: {
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+  },
+  cardPreviewImage: {
+    width: '100%',
+    height: 80,
+    marginBottom: spacing[2],
+    borderRadius: borderRadius.sm,
+  },
+  cardPreviewImageSmall: {
+    width: '100%',
+    height: 50,
+    marginTop: spacing[1],
+    marginBottom: spacing[1],
+    borderRadius: borderRadius.sm,
+  },
   cardFront: {
     fontSize: typography.sizes.base,
     fontWeight: typography.fontWeight.medium,
@@ -933,12 +1235,92 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sm,
   },
   createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: spacing[3],
-    paddingHorizontal: spacing[6],
+    paddingHorizontal: spacing[5],
     borderRadius: borderRadius.md,
   },
   createButtonText: {
     color: '#fff',
+    fontSize: typography.sizes.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  topActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing[4],
+    borderBottomWidth: 1,
+  },
+  previewScrollView: {
+    flex: 1,
+  },
+  cardActions: {
+    flexDirection: 'column',
+    gap: spacing[2],
+    marginLeft: spacing[2],
+  },
+  cardActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  editModal: {
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '90%',
+    ...shadows.lg,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing[4],
+    borderBottomWidth: 1,
+  },
+  editModalTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  editModalContent: {
+    padding: spacing[4],
+    maxHeight: 400,
+  },
+  editModalImage: {
+    width: '100%',
+    height: 120,
+    marginBottom: spacing[3],
+    borderRadius: borderRadius.md,
+  },
+  editTextInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing[3],
+    fontSize: typography.sizes.base,
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  editModalFooter: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    padding: spacing[4],
+    borderTopWidth: 1,
+  },
+  editModalButton: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  editModalButtonText: {
     fontSize: typography.sizes.base,
     fontWeight: typography.fontWeight.semibold,
   },

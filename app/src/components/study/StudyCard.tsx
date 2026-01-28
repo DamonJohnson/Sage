@@ -185,6 +185,7 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const isMultipleChoice = card.cardType === 'multiple_choice' && card.options;
+  const isCloze = card.cardType === 'cloze';
 
   // Reset state when card changes
   useEffect(() => {
@@ -353,6 +354,108 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
       zIndex: rotation.value >= 90 ? 2 : 0,
     };
   });
+
+  // Helper to render cloze text with highlighted blank/answer
+  const renderClozeText = (text: string, showAnswer: boolean) => {
+    // Find [...] or [hint] patterns and highlight them
+    const parts = text.split(/(\[\.{3}\]|\[[^\]]+\])/g);
+
+    return (
+      <Text style={[styles.clozeText, { color: textPrimary }]}>
+        {parts.map((part, index) => {
+          if (part.match(/^\[\.{3}\]$/) || part.match(/^\[[^\]]+\]$/)) {
+            // This is a blank - show highlighted
+            if (showAnswer) {
+              // Show the answer
+              return (
+                <Text key={index} style={[styles.clozeAnswer, { color: accent.orange, backgroundColor: accent.orange + '20' }]}>
+                  {card.back}
+                </Text>
+              );
+            } else {
+              // Show the blank
+              return (
+                <Text key={index} style={[styles.clozeBlank, { backgroundColor: accent.orange + '20', color: accent.orange }]}>
+                  {part}
+                </Text>
+              );
+            }
+          }
+          return <Text key={index}>{part}</Text>;
+        })}
+      </Text>
+    );
+  };
+
+  // For cloze deletion cards, render fill-in-the-blank UI
+  if (isCloze) {
+    return (
+      <Pressable onPress={handlePress} style={styles.container}>
+        {/* Front of card (with blank) */}
+        <Animated.View
+          style={[
+            styles.card,
+            styles.cardFront,
+            { backgroundColor: surface, borderColor: border },
+            frontAnimatedStyle,
+          ]}
+        >
+          <View style={[styles.cardLabel, { backgroundColor: accent.purple + '20' }]}>
+            <Text style={[styles.cardLabelText, { color: accent.purple }]}>Cloze Deletion</Text>
+          </View>
+          <View style={styles.cardContent}>
+            {card.frontImage && (
+              <TouchableOpacity onPress={() => handleImagePress(card.frontImage!)} activeOpacity={0.8} style={styles.imageContainer}>
+                <Image
+                  source={{ uri: card.frontImage }}
+                  style={styles.cardImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.zoomHint}>
+                  <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
+            )}
+            {renderClozeText(card.front, false)}
+          </View>
+          {renderImageZoomModal()}
+          <View style={styles.flipHint}>
+            <Ionicons name="refresh-outline" size={16} color={textSecondary} />
+            <Text style={[styles.flipHintText, { color: textSecondary }]}>Tap to reveal answer</Text>
+          </View>
+        </Animated.View>
+
+        {/* Back of card (with answer revealed) */}
+        <Animated.View
+          style={[
+            styles.card,
+            styles.cardBack,
+            { backgroundColor: accent.purple + '15', borderColor: accent.purple + '40' },
+            backAnimatedStyle,
+          ]}
+        >
+          <View style={[styles.cardLabel, { backgroundColor: accent.purple + '20' }]}>
+            <Text style={[styles.cardLabelText, { color: accent.purple }]}>Answer</Text>
+          </View>
+          <View style={styles.cardContent}>
+            {card.frontImage && (
+              <TouchableOpacity onPress={() => handleImagePress(card.frontImage!)} activeOpacity={0.8} style={styles.imageContainer}>
+                <Image
+                  source={{ uri: card.frontImage }}
+                  style={styles.cardImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.zoomHint}>
+                  <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
+            )}
+            {renderClozeText(card.front, true)}
+          </View>
+        </Animated.View>
+      </Pressable>
+    );
+  }
 
   // For multiple-choice cards, render a different UI
   if (isMultipleChoice && card.options) {
@@ -724,5 +827,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: borderRadius.full,
     padding: spacing[1],
+  },
+  // Cloze deletion styles
+  clozeText: {
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.fontWeight.medium,
+    textAlign: 'center',
+    lineHeight: 32,
+  },
+  clozeBlank: {
+    fontWeight: typography.fontWeight.bold,
+    paddingHorizontal: spacing[2],
+    borderRadius: borderRadius.sm,
+  },
+  clozeAnswer: {
+    fontWeight: typography.fontWeight.bold,
+    paddingHorizontal: spacing[2],
+    borderRadius: borderRadius.sm,
   },
 });

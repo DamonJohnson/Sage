@@ -76,6 +76,8 @@ export function CreateAIScreen() {
   const [cardCount, setCardCount] = useState(10);
   const [difficulty, setDifficulty] = useState<'basic' | 'intermediate' | 'advanced' | 'expert'>('intermediate');
   const [multipleChoiceRatio, setMultipleChoiceRatio] = useState(0); // 0 = all flashcards, 0.5 = half, 1 = all MC
+  const [clozeRatio, setClozeRatio] = useState(0); // 0 = none, 1 = all cloze
+  const [cardTypeMode, setCardTypeMode] = useState<'flashcard' | 'mixed' | 'mc' | 'cloze'>('flashcard');
   const [isPublic, setIsPublic] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationPhase, setGenerationPhase] = useState(0);
@@ -151,12 +153,25 @@ export function CreateAIScreen() {
 
     try {
       // Try to call the API
+      // Calculate ratios based on card type mode
+      let mcRatio = 0;
+      let cRatio = 0;
+      if (cardTypeMode === 'mixed') {
+        mcRatio = 0.3;
+        cRatio = 0.3;
+      } else if (cardTypeMode === 'mc') {
+        mcRatio = 1;
+      } else if (cardTypeMode === 'cloze') {
+        cRatio = 1;
+      }
+
       const response = await generateFromTopic({
         topic: topic.trim(),
         count: cardCount,
         difficulty,
         customInstructions: customInstructions.trim() || undefined,
-        multipleChoiceRatio,
+        multipleChoiceRatio: mcRatio,
+        clozeRatio: cRatio,
       });
 
       if (response.success && response.data?.cards) {
@@ -202,13 +217,14 @@ export function CreateAIScreen() {
     setIsSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Add cards in batch - preserve card type and options
+    // Add cards in batch - preserve card type, options, and cloze index
     const cardsToAdd = previewCards.map((card) => ({
       front: card.front,
       back: card.back,
       cardType: card.cardType || 'flashcard',
       options: card.options || null,
       explanation: card.explanation || null,
+      clozeIndex: card.clozeIndex || null,
     }));
 
     let targetDeckId = existingDeckId;
@@ -478,6 +494,12 @@ export function CreateAIScreen() {
                     <View style={[styles.cardTypeBadge, { backgroundColor: accent.blue + '20' }]}>
                       <Ionicons name="list-outline" size={12} color={accent.blue} />
                       <Text style={[styles.cardTypeBadgeText, { color: accent.blue }]}>Multiple Choice</Text>
+                    </View>
+                  )}
+                  {card.cardType === 'cloze' && (
+                    <View style={[styles.cardTypeBadge, { backgroundColor: accent.purple + '20' }]}>
+                      <Ionicons name="ellipsis-horizontal" size={12} color={accent.purple} />
+                      <Text style={[styles.cardTypeBadgeText, { color: accent.purple }]}>Cloze Deletion</Text>
                     </View>
                   )}
                   <Text style={[styles.previewCardLabel, { color: textSecondary }]}>Question</Text>
@@ -755,86 +777,113 @@ export function CreateAIScreen() {
         {/* Card Type */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: textSecondary }]}>Card Type</Text>
-          <View style={styles.cardTypeGrid}>
+          <View style={styles.cardTypeGridWrap}>
             <TouchableOpacity
               style={[
                 styles.cardTypeOption,
                 { backgroundColor: surface, borderColor: border },
-                multipleChoiceRatio === 0 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+                cardTypeMode === 'flashcard' && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
               ]}
               onPress={() => {
                 Haptics.selectionAsync();
-                setMultipleChoiceRatio(0);
+                setCardTypeMode('flashcard');
               }}
               disabled={isGenerating}
             >
               <Ionicons
                 name="documents-outline"
                 size={20}
-                color={multipleChoiceRatio === 0 ? accent.orange : textSecondary}
+                color={cardTypeMode === 'flashcard' ? accent.orange : textSecondary}
               />
               <Text
                 style={[
                   styles.cardTypeOptionText,
                   { color: textSecondary },
-                  multipleChoiceRatio === 0 && { color: accent.orange },
+                  cardTypeMode === 'flashcard' && { color: accent.orange },
                 ]}
               >
-                Flashcards Only
+                Flashcards
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.cardTypeOption,
                 { backgroundColor: surface, borderColor: border },
-                multipleChoiceRatio === 0.5 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+                cardTypeMode === 'cloze' && { backgroundColor: accent.purple + '20', borderColor: accent.purple },
               ]}
               onPress={() => {
                 Haptics.selectionAsync();
-                setMultipleChoiceRatio(0.5);
+                setCardTypeMode('cloze');
               }}
               disabled={isGenerating}
             >
               <Ionicons
-                name="grid-outline"
+                name="ellipsis-horizontal"
                 size={20}
-                color={multipleChoiceRatio === 0.5 ? accent.orange : textSecondary}
+                color={cardTypeMode === 'cloze' ? accent.purple : textSecondary}
               />
               <Text
                 style={[
                   styles.cardTypeOptionText,
                   { color: textSecondary },
-                  multipleChoiceRatio === 0.5 && { color: accent.orange },
+                  cardTypeMode === 'cloze' && { color: accent.purple },
                 ]}
               >
-                Mixed
+                Cloze
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.cardTypeOption,
                 { backgroundColor: surface, borderColor: border },
-                multipleChoiceRatio === 1 && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+                cardTypeMode === 'mc' && { backgroundColor: accent.blue + '20', borderColor: accent.blue },
               ]}
               onPress={() => {
                 Haptics.selectionAsync();
-                setMultipleChoiceRatio(1);
+                setCardTypeMode('mc');
               }}
               disabled={isGenerating}
             >
               <Ionicons
                 name="list-outline"
                 size={20}
-                color={multipleChoiceRatio === 1 ? accent.orange : textSecondary}
+                color={cardTypeMode === 'mc' ? accent.blue : textSecondary}
               />
               <Text
                 style={[
                   styles.cardTypeOptionText,
                   { color: textSecondary },
-                  multipleChoiceRatio === 1 && { color: accent.orange },
+                  cardTypeMode === 'mc' && { color: accent.blue },
                 ]}
               >
                 Multiple Choice
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.cardTypeOption,
+                { backgroundColor: surface, borderColor: border },
+                cardTypeMode === 'mixed' && { backgroundColor: accent.green + '20', borderColor: accent.green },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setCardTypeMode('mixed');
+              }}
+              disabled={isGenerating}
+            >
+              <Ionicons
+                name="grid-outline"
+                size={20}
+                color={cardTypeMode === 'mixed' ? accent.green : textSecondary}
+              />
+              <Text
+                style={[
+                  styles.cardTypeOptionText,
+                  { color: textSecondary },
+                  cardTypeMode === 'mixed' && { color: accent.green },
+                ]}
+              >
+                Mixed
               </Text>
             </TouchableOpacity>
           </View>
@@ -1364,8 +1413,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing[2],
   },
+  cardTypeGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
   cardTypeOption: {
-    flex: 1,
+    flexBasis: '48%',
+    flexGrow: 0,
+    flexShrink: 0,
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',

@@ -10,12 +10,13 @@ import api from './api';
 export interface GeneratedCard {
   front: string;
   back: string;
-  cardType?: 'flashcard' | 'multiple_choice';
+  cardType?: 'flashcard' | 'multiple_choice' | 'cloze';
   options?: string[] | null;
   explanation?: string | null;
   frontImage?: string | null;
   backImage?: string | null;
   imageIndex?: number; // Index of source image (for image-based generation)
+  clozeIndex?: number | null; // For cloze cards
 }
 
 export interface GenerateFromTopicParams {
@@ -25,6 +26,7 @@ export interface GenerateFromTopicParams {
   customInstructions?: string;
   includeExplanations?: boolean;
   multipleChoiceRatio?: number; // 0 = all flashcards, 1 = all multiple choice
+  clozeRatio?: number; // 0 = none, 1 = all cloze deletion
 }
 
 export interface ValidateTopicResponse {
@@ -144,6 +146,7 @@ export async function generateFromTopic(
     customInstructions: params.customInstructions,
     includeExplanations: params.includeExplanations || false,
     multipleChoiceRatio: params.multipleChoiceRatio || 0,
+    clozeRatio: params.clozeRatio || 0,
   });
 }
 

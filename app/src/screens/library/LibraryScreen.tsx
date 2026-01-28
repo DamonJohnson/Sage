@@ -292,17 +292,34 @@ export function LibraryScreen() {
           </View>
         ) : (
           <View style={[styles.sectionEmptyState, { backgroundColor: surface, borderColor: border }]}>
-            <Ionicons name="create-outline" size={32} color={textSecondary} />
+            <Ionicons
+              name={filterBy === 'mastered' ? 'trophy-outline' : filterBy === 'due' ? 'time-outline' : 'create-outline'}
+              size={32}
+              color={textSecondary}
+            />
             <Text style={[styles.sectionEmptyText, { color: textSecondary }]}>
-              {searchQuery ? 'No matching decks' : 'No decks created yet'}
+              {searchQuery
+                ? 'No matching decks'
+                : filterBy === 'mastered'
+                ? 'No mastered decks yet'
+                : filterBy === 'due'
+                ? 'No decks due for review'
+                : 'No decks created yet'}
             </Text>
-            {!searchQuery && (
+            {!searchQuery && filterBy === 'all' && (
               <TouchableOpacity
                 style={[styles.sectionEmptyButton, { backgroundColor: accent.orange }]}
                 onPress={() => navigation.navigate('CreateTab' as never)}
               >
                 <Text style={styles.sectionEmptyButtonText}>Create Deck</Text>
               </TouchableOpacity>
+            )}
+            {!searchQuery && filterBy !== 'all' && (
+              <Text style={[styles.sectionEmptyHint, { color: textSecondary }]}>
+                {filterBy === 'mastered'
+                  ? 'Keep studying to master your decks!'
+                  : 'Great job! All caught up.'}
+              </Text>
             )}
           </View>
         )}
@@ -346,17 +363,34 @@ export function LibraryScreen() {
           </View>
         ) : (
           <View style={[styles.sectionEmptyState, { backgroundColor: surface, borderColor: border }]}>
-            <Ionicons name="compass-outline" size={32} color={textSecondary} />
+            <Ionicons
+              name={filterBy === 'mastered' ? 'trophy-outline' : filterBy === 'due' ? 'time-outline' : 'compass-outline'}
+              size={32}
+              color={textSecondary}
+            />
             <Text style={[styles.sectionEmptyText, { color: textSecondary }]}>
-              {searchQuery ? 'No matching decks' : 'No saved decks yet'}
+              {searchQuery
+                ? 'No matching decks'
+                : filterBy === 'mastered'
+                ? 'No mastered decks yet'
+                : filterBy === 'due'
+                ? 'No decks due for review'
+                : 'No saved decks yet'}
             </Text>
-            {!searchQuery && (
+            {!searchQuery && filterBy === 'all' && (
               <TouchableOpacity
                 style={[styles.sectionEmptyButton, { backgroundColor: accent.blue }]}
                 onPress={() => navigation.navigate('DiscoverTab' as never)}
               >
                 <Text style={styles.sectionEmptyButtonText}>Browse Public Decks</Text>
               </TouchableOpacity>
+            )}
+            {!searchQuery && filterBy !== 'all' && (
+              <Text style={[styles.sectionEmptyHint, { color: textSecondary }]}>
+                {filterBy === 'mastered'
+                  ? 'Keep studying to master your decks!'
+                  : 'Great job! All caught up.'}
+              </Text>
             )}
           </View>
         )}
@@ -609,6 +643,11 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.base,
     marginTop: spacing[3],
     marginBottom: spacing[4],
+    textAlign: 'center',
+  },
+  sectionEmptyHint: {
+    fontSize: typography.sizes.sm,
+    fontStyle: 'italic',
     textAlign: 'center',
   },
   sectionEmptyButton: {

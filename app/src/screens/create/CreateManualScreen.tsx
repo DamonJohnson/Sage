@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   Platform,
   Alert,
   Switch,
+  Modal,
+  NativeSyntheticEvent,
+  TextInputKeyPressEventData,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -31,6 +34,8 @@ interface CardData {
   cardType: CardType;
   options: string[];
   correctOptionIndex: number | null;
+  clozeIndex: number | null;
+  nextClozeNum: number; // Track next cloze number for insertion
 }
 
 export function CreateManualScreen() {
@@ -43,15 +48,16 @@ export function CreateManualScreen() {
   const [deckDescription, setDeckDescription] = useState('');
   const [isPublic, setIsPublic] = useState(false);
   const [cards, setCards] = useState<CardData[]>([
-    { id: '1', front: '', back: '', cardType: 'flashcard', options: ['', '', '', ''], correctOptionIndex: null },
+    { id: '1', front: '', back: '', cardType: 'flashcard', options: ['', '', '', ''], correctOptionIndex: null, clozeIndex: null, nextClozeNum: 1 },
   ]);
   const [isSaving, setIsSaving] = useState(false);
+  const [showClozeInfo, setShowClozeInfo] = useState(false);
 
   const handleAddCard = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    setCards([...cards, { id: Date.now().toString(), front: '', back: '', cardType: 'flashcard', options: ['', '', '', ''], correctOptionIndex: null }]);
+    setCards([...cards, { id: Date.now().toString(), front: '', back: '', cardType: 'flashcard', options: ['', '', '', ''], correctOptionIndex: null, clozeIndex: null, nextClozeNum: 1 }]);
   };
 
   const handleRemoveCard = (id: string) => {
@@ -69,14 +75,13 @@ export function CreateManualScreen() {
     setCards(cards.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
   };
 
-  const handleToggleCardType = (id: string) => {
+  const handleSetCardType = (id: string, newType: CardType) => {
     if (Platform.OS !== 'web') {
       Haptics.selectionAsync();
     }
     setCards(cards.map((c) => {
-      if (c.id === id) {
-        const newType = c.cardType === 'flashcard' ? 'multiple_choice' : 'flashcard';
-        return { ...c, cardType: newType };
+      if (c.id === id && c.cardType !== newType) {
+        return { ...c, cardType: newType, clozeIndex: newType === 'cloze' ? 1 : null };
       }
       return c;
     }));
@@ -105,6 +110,94 @@ export function CreateManualScreen() {
     }));
   };
 
+  // Insert a numbered cloze deletion marker
+  const handleInsertCloze = (cardId: string) => {
+    const card = cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    const clozeNum = card.nextClozeNum;
+    const clozeMarker = `{{c${clozeNum}::}}`;
+    const newText = card.front + clozeMarker;
+
+    setCards(cards.map(c => {
+      if (c.id === cardId) {
+        return { ...c, front: newText, nextClozeNum: clozeNum + 1 };
+      }
+      return c;
+    }));
+
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  // Handle keyboard shortcut for inserting cloze blank (Ctrl/Cmd + B)
+  const handleClozeKeyPress = (cardId: string) => {
+    handleInsertCloze(cardId);
+  };
+
+  // Count cloze deletions in text
+  const countClozeInText = (text: string): number => {
+    const matches = text.match(/\{\{c\d+::/g);
+    return matches ? matches.length : 0;
+  };
+
+  // Get unique cloze numbers from text
+  const getClozeNumbers = (text: string): number[] => {
+    const matches = text.match(/\{\{c(\d+)::/g);
+    if (!matches) return [];
+    const numbers = new Set<number>();
+    for (const match of matches) {
+      const num = parseInt(match.match(/\d+/)?.[0] || '1');
+      numbers.add(num);
+    }
+    return Array.from(numbers).sort((a, b) => a - b);
+  };
+
+  // Create cloze card for a specific cloze number
+  const createClozeCardData = (text: string, clozeNum: number): { front: string; back: string } => {
+    // Extract the answer for the tested cloze
+    const answerRegex = new RegExp(`\\{\\{c${clozeNum}::([^}]+)\\}\\}`, 'gi');
+    const answerMatch = answerRegex.exec(text);
+    const answer = answerMatch ? answerMatch[1] : '';
+
+    // Create front: replace tested cloze with [...], reveal others
+    let front = text;
+    // Replace the tested cloze with [...]
+    front = front.replace(new RegExp(`\\{\\{c${clozeNum}::([^}]+)\\}\\}`, 'gi'), '[...]');
+    // Reveal all other clozes (show the answer)
+    front = front.replace(/\{\{c\d+::([^}]+)\}\}/gi, '$1');
+
+    return { front, back: answer };
+  };
+
+  // Expand cloze card into multiple cards
+  const expandClozeCard = (card: CardData): Array<{
+    front: string;
+    back: string;
+    cardType: CardType;
+    options: string[] | null;
+    clozeIndex: number | null;
+    frontImage: null;
+    backImage: null;
+    explanation: string | null;
+  }> => {
+    const clozeNumbers = getClozeNumbers(card.front);
+    return clozeNumbers.map(clozeNum => {
+      const { front, back } = createClozeCardData(card.front, clozeNum);
+      return {
+        front,
+        back: back + (card.back ? '\n\n' + card.back : ''), // Append extra notes if any
+        cardType: 'cloze' as CardType,
+        options: null,
+        clozeIndex: clozeNum,
+        frontImage: null,
+        backImage: null,
+        explanation: null,
+      };
+    });
+  };
+
   const handleSave = async () => {
     // Validation
     if (!deckTitle.trim()) {
@@ -112,7 +205,7 @@ export function CreateManualScreen() {
       return;
     }
 
-    // For multiple choice cards, check that at least 2 options are filled and a correct answer is selected
+    // Validate cards based on type
     const validCards = cards.filter((c) => {
       if (!c.front.trim()) return false;
       if (c.cardType === 'multiple_choice') {
@@ -121,6 +214,14 @@ export function CreateManualScreen() {
         // Check that a correct answer is selected and the option has text
         if (c.correctOptionIndex === null) return false;
         if (!c.options[c.correctOptionIndex]?.trim()) return false;
+      } else if (c.cardType === 'cloze') {
+        // For cloze, check for Anki-style {{c1::answer}} syntax with filled answers
+        const clozePattern = /\{\{c\d+::([^}]+)\}\}/g;
+        const matches = c.front.match(clozePattern);
+        if (!matches || matches.length === 0) return false;
+        // Check each cloze has content (not just {{c1::}})
+        const hasEmptyCloze = /\{\{c\d+::\}\}/.test(c.front);
+        if (hasEmptyCloze) return false;
       } else {
         // For flashcards, require back text
         if (!c.back.trim()) return false;
@@ -129,7 +230,7 @@ export function CreateManualScreen() {
     });
 
     if (validCards.length === 0) {
-      Alert.alert('No Valid Cards', 'Please add at least one card with a question. For flashcards, include an answer. For multiple choice, fill at least 2 options and select the correct one.');
+      Alert.alert('No Valid Cards', 'Please add at least one valid card.\n\n• Flashcards: Need question and answer\n• Cloze: Use {{c1::answer}} syntax with text inside\n• Multiple choice: Need 2+ options with correct answer selected');
       return;
     }
 
@@ -159,24 +260,52 @@ export function CreateManualScreen() {
         throw new Error('Failed to create deck');
       }
 
-      // Add cards in batch
-      const cardsToAdd = validCards.map((card) => {
-        const filledOptions = card.cardType === 'multiple_choice'
-          ? card.options.filter(opt => opt.trim())
-          : null;
+      // Add cards in batch - expand cloze cards into multiple cards
+      const cardsToAdd: Array<{
+        front: string;
+        back: string;
+        cardType: CardType;
+        options: string[] | null;
+        clozeIndex: number | null;
+        frontImage: null;
+        backImage: null;
+        explanation: string | null;
+      }> = [];
 
-        // For multiple choice, the "back" is the correct answer option
-        const back = card.cardType === 'multiple_choice' && card.correctOptionIndex !== null
-          ? card.options[card.correctOptionIndex].trim()
-          : card.back.trim();
-
-        return {
-          front: card.front.trim(),
-          back,
-          cardType: card.cardType,
-          options: filledOptions,
-        };
-      });
+      for (const card of validCards) {
+        if (card.cardType === 'cloze') {
+          // Expand cloze card into multiple cards
+          const expandedCards = expandClozeCard(card);
+          cardsToAdd.push(...expandedCards);
+        } else if (card.cardType === 'multiple_choice') {
+          const filledOptions = card.options.filter(opt => opt.trim());
+          const back = card.correctOptionIndex !== null
+            ? card.options[card.correctOptionIndex].trim()
+            : '';
+          cardsToAdd.push({
+            front: card.front.trim(),
+            back,
+            cardType: card.cardType,
+            options: filledOptions,
+            clozeIndex: null,
+            frontImage: null,
+            backImage: null,
+            explanation: null,
+          });
+        } else {
+          // Flashcard
+          cardsToAdd.push({
+            front: card.front.trim(),
+            back: card.back.trim(),
+            cardType: card.cardType,
+            options: null,
+            clozeIndex: null,
+            frontImage: null,
+            backImage: null,
+            explanation: null,
+          });
+        }
+      }
 
       await addCards(deckId, cardsToAdd);
 
@@ -310,7 +439,7 @@ export function CreateManualScreen() {
                     { borderColor: border },
                     card.cardType === 'flashcard' && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
                   ]}
-                  onPress={() => card.cardType !== 'flashcard' && handleToggleCardType(card.id)}
+                  onPress={() => handleSetCardType(card.id, 'flashcard')}
                 >
                   <Ionicons
                     name="copy-outline"
@@ -326,48 +455,157 @@ export function CreateManualScreen() {
                     Flashcard
                   </Text>
                 </TouchableOpacity>
+                <View style={styles.cardTypeButtonWrapper}>
+                  <TouchableOpacity
+                    style={[
+                      styles.cardTypeButton,
+                      { borderColor: border },
+                      card.cardType === 'cloze' && { backgroundColor: accent.purple + '20', borderColor: accent.purple },
+                    ]}
+                    onPress={() => handleSetCardType(card.id, 'cloze')}
+                  >
+                    <Ionicons
+                      name="ellipsis-horizontal"
+                      size={16}
+                      color={card.cardType === 'cloze' ? accent.purple : textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.cardTypeText,
+                        { color: card.cardType === 'cloze' ? accent.purple : textSecondary },
+                      ]}
+                    >
+                      Cloze
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.clozeInfoButton, { backgroundColor: accent.purple + '20' }]}
+                    onPress={() => setShowClozeInfo(true)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="help-circle" size={16} color={accent.purple} />
+                  </TouchableOpacity>
+                </View>
                 <TouchableOpacity
                   style={[
                     styles.cardTypeButton,
                     { borderColor: border },
-                    card.cardType === 'multiple_choice' && { backgroundColor: accent.orange + '20', borderColor: accent.orange },
+                    card.cardType === 'multiple_choice' && { backgroundColor: accent.blue + '20', borderColor: accent.blue },
                   ]}
-                  onPress={() => card.cardType !== 'multiple_choice' && handleToggleCardType(card.id)}
+                  onPress={() => handleSetCardType(card.id, 'multiple_choice')}
                 >
                   <Ionicons
                     name="list-outline"
                     size={16}
-                    color={card.cardType === 'multiple_choice' ? accent.orange : textSecondary}
+                    color={card.cardType === 'multiple_choice' ? accent.blue : textSecondary}
                   />
                   <Text
                     style={[
                       styles.cardTypeText,
-                      { color: card.cardType === 'multiple_choice' ? accent.orange : textSecondary },
+                      { color: card.cardType === 'multiple_choice' ? accent.blue : textSecondary },
                     ]}
                   >
-                    Multiple Choice
+                    Multi-Choice
                   </Text>
                 </TouchableOpacity>
               </View>
 
+              {/* Cloze-specific UI */}
+              {card.cardType === 'cloze' && (
+                <View style={[styles.clozeTipContainer, { backgroundColor: accent.purple + '10', borderColor: accent.purple + '30' }]}>
+                  <View style={styles.clozeTipHeader}>
+                    <Ionicons name="bulb-outline" size={16} color={accent.purple} />
+                    <Text style={[styles.clozeTipTitle, { color: accent.purple }]}>How to create cloze cards</Text>
+                  </View>
+                  <Text style={[styles.clozeTipText, { color: textSecondary }]}>
+                    Use <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: accent.purple }}>{'{{c1::answer}}'}</Text> syntax to mark blanks.{'\n\n'}
+                    <Text style={{ fontWeight: '600', color: textPrimary }}>Single blank:</Text> "The {'{{c1::mitochondria}}'} is the powerhouse"{'\n\n'}
+                    <Text style={{ fontWeight: '600', color: textPrimary }}>Multiple blanks:</Text> "{'{{c1::Paris}}'} is the capital of {'{{c2::France}}'}"
+                  </Text>
+                  <Text style={[styles.clozeTipNote, { color: textSecondary }]}>
+                    Each numbered blank creates a separate study card.
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.cardInputGroup}>
-                <Text style={[styles.cardLabel, { color: textSecondary }]}>Front (Question)</Text>
+                <View style={styles.labelRow}>
+                  <Text style={[styles.cardLabel, { color: textSecondary }]}>
+                    {card.cardType === 'cloze' ? 'Text with cloze deletions' : 'Front (Question)'}
+                  </Text>
+                  {card.cardType === 'cloze' && Platform.OS === 'web' && (
+                    <Text style={[styles.hotkeyHint, { color: textSecondary }]}>
+                      Ctrl+B to insert
+                    </Text>
+                  )}
+                </View>
                 <TextInput
-                  style={[styles.cardInput, { backgroundColor: surfaceHover, color: textPrimary }]}
-                  placeholder="Enter the question or term"
+                  style={[
+                    styles.cardInput,
+                    { backgroundColor: surfaceHover, color: textPrimary },
+                    card.cardType === 'cloze' && styles.clozeInput,
+                  ]}
+                  placeholder={card.cardType === 'cloze'
+                    ? "e.g., The {{c1::mitochondria}} is the {{c2::powerhouse}} of the cell"
+                    : "Enter the question or term"}
                   placeholderTextColor={textSecondary}
                   value={card.front}
                   onChangeText={(text) => handleUpdateCard(card.id, 'front', text)}
                   multiline
+                  {...(card.cardType === 'cloze' && Platform.OS === 'web' ? {
+                    onKeyPress: (e: any) => {
+                      // Handle Ctrl+B or Cmd+B for inserting blank
+                      const nativeEvent = e.nativeEvent as any;
+                      if ((nativeEvent.ctrlKey || nativeEvent.metaKey) && nativeEvent.key === 'b') {
+                        e.preventDefault();
+                        handleClozeKeyPress(card.id);
+                      }
+                    }
+                  } : {})}
                 />
+                {/* Insert cloze buttons */}
+                {card.cardType === 'cloze' && (
+                  <View style={styles.clozeButtonRow}>
+                    <TouchableOpacity
+                      style={[styles.insertBlankButton, { backgroundColor: accent.purple + '20' }]}
+                      onPress={() => handleInsertCloze(card.id)}
+                    >
+                      <Ionicons name="add" size={14} color={accent.purple} />
+                      <Text style={[styles.insertBlankText, { color: accent.purple }]}>
+                        Insert {'{{c' + card.nextClozeNum + '::}}'}{Platform.OS === 'web' ? ' (Ctrl+B)' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                    {countClozeInText(card.front) > 0 && (
+                      <View style={[styles.clozeCountBadge, { backgroundColor: accent.purple + '20' }]}>
+                        <Text style={[styles.clozeCountText, { color: accent.purple }]}>
+                          {countClozeInText(card.front)} cloze{countClozeInText(card.front) !== 1 ? 's' : ''} → {countClozeInText(card.front)} card{countClozeInText(card.front) !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
 
-              {card.cardType !== 'multiple_choice' && (
+              {card.cardType === 'flashcard' && (
                 <View style={styles.cardInputGroup}>
                   <Text style={[styles.cardLabel, { color: textSecondary }]}>Back (Answer)</Text>
                   <TextInput
                     style={[styles.cardInput, { backgroundColor: surfaceHover, color: textPrimary }]}
                     placeholder="Enter the answer or definition"
+                    placeholderTextColor={textSecondary}
+                    value={card.back}
+                    onChangeText={(text) => handleUpdateCard(card.id, 'back', text)}
+                    multiline
+                  />
+                </View>
+              )}
+
+              {card.cardType === 'cloze' && (
+                <View style={styles.cardInputGroup}>
+                  <Text style={[styles.cardLabel, { color: textSecondary }]}>Extra Notes (optional)</Text>
+                  <TextInput
+                    style={[styles.cardInput, { backgroundColor: surfaceHover, color: textPrimary }]}
+                    placeholder="Additional context shown on the back of the card"
                     placeholderTextColor={textSecondary}
                     value={card.back}
                     onChangeText={(text) => handleUpdateCard(card.id, 'back', text)}
@@ -451,6 +689,79 @@ export function CreateManualScreen() {
 
         <View style={{ height: spacing[20] }} />
       </ScrollView>
+
+      {/* Cloze Info Modal */}
+      <Modal
+        visible={showClozeInfo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowClozeInfo(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowClozeInfo(false)}
+        >
+          <View style={[styles.clozeInfoModal, { backgroundColor: surface }]}>
+            <View style={styles.clozeInfoHeader}>
+              <View style={[styles.clozeInfoIconContainer, { backgroundColor: accent.purple + '20' }]}>
+                <Ionicons name="school-outline" size={24} color={accent.purple} />
+              </View>
+              <Text style={[styles.clozeInfoTitle, { color: textPrimary }]}>What is Cloze Deletion?</Text>
+              <TouchableOpacity
+                onPress={() => setShowClozeInfo(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={24} color={textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.clozeInfoText, { color: textSecondary }]}>
+              Cloze deletion (fill-in-the-blank) is a powerful learning technique where you hide key words in a sentence and test yourself on recalling them.
+            </Text>
+
+            <View style={[styles.clozeInfoExample, { backgroundColor: surfaceHover }]}>
+              <Text style={[styles.clozeInfoExampleLabel, { color: accent.purple }]}>Example</Text>
+              <Text style={[styles.clozeInfoExampleText, { color: textPrimary }]}>
+                "The {'{{c1::mitochondria}}'} is the powerhouse of the cell"
+              </Text>
+              <Ionicons name="arrow-down" size={16} color={textSecondary} style={{ marginVertical: spacing[2] }} />
+              <Text style={[styles.clozeInfoExampleText, { color: textPrimary }]}>
+                Study card shows: "The [...] is the powerhouse of the cell"
+              </Text>
+            </View>
+
+            <View style={styles.clozeInfoBenefits}>
+              <Text style={[styles.clozeInfoBenefitsTitle, { color: textPrimary }]}>Why use cloze?</Text>
+              <View style={styles.clozeInfoBenefit}>
+                <Ionicons name="checkmark-circle" size={18} color={accent.green} />
+                <Text style={[styles.clozeInfoBenefitText, { color: textSecondary }]}>
+                  Learn facts in context, not isolation
+                </Text>
+              </View>
+              <View style={styles.clozeInfoBenefit}>
+                <Ionicons name="checkmark-circle" size={18} color={accent.green} />
+                <Text style={[styles.clozeInfoBenefitText, { color: textSecondary }]}>
+                  Multiple blanks = multiple cards from one note
+                </Text>
+              </View>
+              <View style={styles.clozeInfoBenefit}>
+                <Ionicons name="checkmark-circle" size={18} color={accent.green} />
+                <Text style={[styles.clozeInfoBenefitText, { color: textSecondary }]}>
+                  Ideal for definitions, lists, and sequences
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.clozeInfoCloseButton, { backgroundColor: accent.purple }]}
+              onPress={() => setShowClozeInfo(false)}
+            >
+              <Text style={styles.clozeInfoCloseButtonText}>Got it!</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -581,7 +892,7 @@ const styles = StyleSheet.create({
   },
   cardTypeToggle: {
     flexDirection: 'row',
-    gap: spacing[2],
+    gap: spacing[1.5],
     marginBottom: spacing[4],
   },
   cardTypeButton: {
@@ -590,13 +901,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
+    paddingHorizontal: spacing[2],
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    gap: spacing[1],
+    gap: 4,
   },
   cardTypeText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.sizes.xs,
     fontWeight: '500',
   },
   optionsContainer: {
@@ -647,5 +958,171 @@ const styles = StyleSheet.create({
   },
   saveContainer: {
     paddingVertical: spacing[4],
+  },
+  // Cloze-specific styles
+  clozeTipContainer: {
+    padding: spacing[3],
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    marginBottom: spacing[3],
+  },
+  clozeTipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[2],
+  },
+  clozeTipTitle: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '600',
+  },
+  clozeTipText: {
+    fontSize: typography.sizes.sm,
+    lineHeight: 20,
+  },
+  clozeTipNote: {
+    fontSize: typography.sizes.xs,
+    fontStyle: 'italic',
+    marginTop: spacing[2],
+  },
+  clozeInput: {
+    minHeight: 80,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  clozeButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  insertBlankButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing[1.5],
+    paddingHorizontal: spacing[2],
+    borderRadius: borderRadius.md,
+    gap: 4,
+  },
+  insertBlankText: {
+    fontSize: typography.sizes.xs,
+    fontWeight: '500',
+  },
+  clozeCountBadge: {
+    paddingVertical: spacing[1],
+    paddingHorizontal: spacing[2],
+    borderRadius: borderRadius.md,
+  },
+  clozeCountText: {
+    fontSize: typography.sizes.xs,
+    fontWeight: '500',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[1],
+  },
+  hotkeyHint: {
+    fontSize: typography.sizes.xs,
+    fontStyle: 'italic',
+  },
+  // Cloze info button and modal
+  cardTypeButtonWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
+  clozeInfoButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  clozeInfoModal: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: borderRadius['2xl'],
+    padding: spacing[5],
+    ...shadows.lg,
+  },
+  clozeInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing[4],
+  },
+  clozeInfoIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing[3],
+  },
+  clozeInfoTitle: {
+    flex: 1,
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  clozeInfoText: {
+    fontSize: typography.sizes.base,
+    lineHeight: 22,
+    marginBottom: spacing[4],
+  },
+  clozeInfoExample: {
+    padding: spacing[4],
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing[4],
+    alignItems: 'center',
+  },
+  clozeInfoExampleLabel: {
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing[2],
+  },
+  clozeInfoExampleText: {
+    fontSize: typography.sizes.sm,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    textAlign: 'center',
+  },
+  clozeInfoBenefits: {
+    marginBottom: spacing[4],
+  },
+  clozeInfoBenefitsTitle: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing[2],
+  },
+  clozeInfoBenefit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[1.5],
+  },
+  clozeInfoBenefitText: {
+    fontSize: typography.sizes.sm,
+    flex: 1,
+  },
+  clozeInfoCloseButton: {
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+  },
+  clozeInfoCloseButtonText: {
+    color: '#fff',
+    fontSize: typography.sizes.base,
+    fontWeight: typography.fontWeight.semibold,
   },
 });

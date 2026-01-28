@@ -151,7 +151,8 @@ const generateFromTopicSchema = z.object({
   difficulty: z.enum(['basic', 'beginner', 'intermediate', 'standard', 'advanced', 'expert']).default('intermediate'),
   customInstructions: z.string().max(500).optional(),
   includeExplanations: z.boolean().optional().default(false),
-  multipleChoiceRatio: z.number().min(0).max(1).optional().default(0), // 0 = all flashcards, 1 = all multiple choice
+  multipleChoiceRatio: z.number().min(0).max(1).optional().default(0), // 0 = none, 1 = all multiple choice
+  clozeRatio: z.number().min(0).max(1).optional().default(0), // 0 = none, 1 = all cloze
 });
 
 const generateFromTextSchema = z.object({
@@ -164,11 +165,12 @@ interface GeneratedCard {
   front: string;
   back: string;
   explanation?: string | null;
-  cardType: 'flashcard' | 'multiple_choice';
+  cardType: 'flashcard' | 'multiple_choice' | 'cloze';
   options?: string[] | null;
   frontImage?: string | null;
   backImage?: string | null;
   imageIndex?: number;
+  clozeIndex?: number | null;
 }
 
 // POST /api/ai/validate-topic - Validate a topic and return clarifying questions if needed
@@ -270,14 +272,15 @@ router.post('/generate-from-topic', async (req: Request, res: Response) => {
       return;
     }
 
-    const { topic, count, customInstructions, includeExplanations, multipleChoiceRatio } = validated.data;
+    const { topic, count, customInstructions, includeExplanations, multipleChoiceRatio, clozeRatio } = validated.data;
     const difficulty = normalizeDifficulty(validated.data.difficulty);
     const difficultyLevel = DIFFICULTY_LEVELS[difficulty];
     const client = getAnthropic();
 
     // Calculate how many of each card type to generate
     const mcCount = Math.round(count * (multipleChoiceRatio || 0));
-    const flashcardCount = count - mcCount;
+    const clozeCount = Math.round(count * (clozeRatio || 0));
+    const flashcardCount = Math.max(0, count - mcCount - clozeCount);
 
     // If no API key, return mock data
     if (!client) {
@@ -295,23 +298,45 @@ router.post('/generate-from-topic', async (req: Request, res: Response) => {
 
     // Build card type instructions
     let cardTypeInstructions = '';
-    if (mcCount > 0 && flashcardCount > 0) {
+    const cardTypeParts: string[] = [];
+
+    if (flashcardCount > 0) {
+      cardTypeParts.push(`- ${flashcardCount} flashcards (cardType: "flashcard") - standard front/back Q&A`);
+    }
+    if (mcCount > 0) {
+      cardTypeParts.push(`- ${mcCount} multiple choice (cardType: "multiple_choice")`);
+    }
+    if (clozeCount > 0) {
+      cardTypeParts.push(`- ${clozeCount} cloze deletion (cardType: "cloze")`);
+    }
+
+    if (cardTypeParts.length > 1 || mcCount > 0 || clozeCount > 0) {
       cardTypeInstructions = `\n## Card Types
 Generate a mix of card types:
-- ${flashcardCount} flashcards (cardType: "flashcard")
-- ${mcCount} multiple choice cards (cardType: "multiple_choice")
+${cardTypeParts.join('\n')}
+`;
 
+      if (mcCount > 0) {
+        cardTypeInstructions += `
 For multiple choice cards:
 - Provide exactly 4 options in the "options" array
 - The "back" field should contain the correct answer (must match one of the options exactly)
 - Options should be plausible but only one should be correct
-- Randomize the position of the correct answer among the options`;
-    } else if (mcCount > 0) {
-      cardTypeInstructions = `\n## Card Type
-All cards should be multiple choice (cardType: "multiple_choice"):
-- Provide exactly 4 options in the "options" array
-- The "back" field should contain the correct answer (must match one of the options exactly)
-- Options should be plausible but only one should be correct`;
+- Randomize the position of the correct answer among the options
+`;
+      }
+
+      if (clozeCount > 0) {
+        cardTypeInstructions += `
+For cloze deletion cards:
+- The "front" field contains the FULL sentence/statement with ONE key term/concept blanked out as [...]
+- The "back" field contains ONLY the blanked word/phrase (the answer)
+- Each cloze card tests ONE blank - keep it atomic
+- Use cloze for definitions, facts within context, fill-in-the-blank style learning
+- Example: front: "The mitochondria is the [...] of the cell", back: "powerhouse"
+- Include "clozeIndex": 1 for each cloze card
+`;
+      }
     }
 
     // Build explanation instructions
@@ -368,7 +393,7 @@ ${customInstructions ? `\n## Custom Instructions\n${customInstructions}` : ''}
 
 ## Output Format
 Respond with ONLY valid JSON. No markdown, no preamble.
-{"cards": [{"front": "question", "back": "concise answer", "cardType": "flashcard"${includeExplanations ? ', "explanation": "detailed explanation"' : ''}${mcCount > 0 ? ', "options": ["opt1", "opt2", "opt3", "opt4"] // only for multiple_choice' : ''}}]}`;
+{"cards": [{"front": "question", "back": "concise answer", "cardType": "flashcard"${includeExplanations ? ', "explanation": "detailed explanation"' : ''}${mcCount > 0 ? ', "options": ["opt1", "opt2", "opt3", "opt4"] // only for multiple_choice' : ''}${clozeCount > 0 ? ', "clozeIndex": 1 // only for cloze cards' : ''}}]}`;
 
     const userPrompt = `Generate ${count} cards about "${topic}" (${difficultyLevel.label} level). Output ONLY valid JSON.`;
 
@@ -398,16 +423,24 @@ Respond with ONLY valid JSON. No markdown, no preamble.
       explanation?: string;
       cardType?: string;
       options?: string[];
-    }) => ({
-      front: card.front,
-      back: card.back,
-      explanation: card.explanation || null,
-      cardType: (card.cardType === 'multiple_choice' ? 'multiple_choice' : 'flashcard') as 'flashcard' | 'multiple_choice',
-      options: card.cardType === 'multiple_choice' && card.options ? card.options : null,
-    }));
+      clozeIndex?: number;
+    }) => {
+      let cardType: 'flashcard' | 'multiple_choice' | 'cloze' = 'flashcard';
+      if (card.cardType === 'multiple_choice') cardType = 'multiple_choice';
+      else if (card.cardType === 'cloze') cardType = 'cloze';
 
-    // Shuffle cards if it's a mixed deck (both flashcards and multiple choice)
-    if (mcCount > 0 && flashcardCount > 0) {
+      return {
+        front: card.front,
+        back: card.back,
+        explanation: card.explanation || null,
+        cardType,
+        options: cardType === 'multiple_choice' && card.options ? card.options : null,
+        clozeIndex: cardType === 'cloze' ? (card.clozeIndex || 1) : null,
+      };
+    });
+
+    // Shuffle cards if it's a mixed deck
+    if ((mcCount > 0 || clozeCount > 0) && flashcardCount > 0) {
       // Fisher-Yates shuffle for random ordering
       for (let i = cards.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));

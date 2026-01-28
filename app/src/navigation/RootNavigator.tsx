@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { TabNavigator } from './TabNavigator';
@@ -31,7 +31,84 @@ import { useThemedColors } from '@/hooks/useThemedColors';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore, useDeckStore } from '@/store';
 import { syncStudyHistory } from '@/services';
-import type { RootStackParamList } from './types';
+import type { RootStackParamList, MainTabParamList } from './types';
+
+// Linking configuration for web URLs
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: [
+    'sage://',
+    'http://localhost:5173',
+    'http://localhost:8081',
+    'https://sage.app', // Production URL placeholder
+  ],
+  config: {
+    screens: {
+      Main: {
+        path: '',
+        screens: {
+          HomeTab: 'dashboard',
+          DiscoverTab: 'discover',
+          LibraryTab: 'library',
+          CreateTab: 'create',
+          ProfileTab: 'profile',
+        } as Record<keyof MainTabParamList, string>,
+      },
+      Study: 'study/:deckId',
+      DeckDetail: 'deck/:deckId',
+      CreateManual: {
+        path: 'create/manual',
+        parse: {
+          deckId: (deckId: string) => deckId,
+        },
+      },
+      CreateAI: {
+        path: 'create/ai',
+        parse: {
+          deckId: (deckId: string) => deckId,
+        },
+      },
+      CreatePDF: {
+        path: 'create/pdf',
+        parse: {
+          deckId: (deckId: string) => deckId,
+        },
+      },
+      CreateImage: 'create/image',
+      CreateImport: {
+        path: 'create/import',
+        parse: {
+          mode: (mode: string) => mode as 'anki' | 'text',
+        },
+      },
+      AddCardsPreview: {
+        path: 'create/preview',
+        parse: {
+          deckId: (deckId: string) => deckId || null,
+          cardCount: (count: string) => parseInt(count, 10),
+          createNewDeck: (value: string) => value === 'true',
+        },
+      },
+      Settings: 'settings',
+      Statistics: 'statistics',
+      Achievements: 'achievements',
+      Help: 'help',
+      Contact: 'contact',
+      PrivacyPolicy: 'privacy',
+      TermsOfService: 'terms',
+      EditProfile: 'profile/edit',
+      PublicDeckPreview: 'discover/deck/:deckId',
+      Social: {
+        path: 'social',
+        parse: {
+          tab: (tab: string) => tab as 'followers' | 'following',
+          viewUserId: (userId: string) => userId,
+        },
+      },
+      UserProfile: 'user/:userId',
+      Review: 'review',
+    },
+  },
+};
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -234,6 +311,7 @@ export function RootNavigator() {
       ref={navigationRef}
       onStateChange={forceUpdate}
       theme={navigationTheme}
+      linking={linking}
     >
       <ResponsiveLayout navigationRef={navigationRef}>
         <MainNavigator />

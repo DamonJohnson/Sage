@@ -150,18 +150,19 @@ export interface PublicDeck extends Deck {
 // Card Types
 // --------------------------------------------
 
-export type CardType = 'flashcard' | 'multiple_choice';
+export type CardType = 'flashcard' | 'multiple_choice' | 'cloze';
 
 export interface Card {
   id: string;
   deckId: string;
-  front: string;
-  back: string;
+  front: string; // For cloze: contains text with {{c1::answer}} markers
+  back: string; // For cloze: can contain extra context or be empty
   explanation: string | null; // Optional detailed explanation/notes
   frontImage: string | null; // URL of image for front of card
   backImage: string | null; // URL of image for back of card
   cardType: CardType;
   options: string[] | null; // For multiple choice
+  clozeIndex: number | null; // For cloze: which cloze number (1, 2, 3...) this card tests
   position: number;
   createdAt: string;
   updatedAt: string;
@@ -290,6 +291,7 @@ export interface GeneratedCard {
   options?: string[];
   frontImage?: string | null; // For labeled diagram cards - include the source image
   backImage?: string | null; // For cards that show an image in the answer
+  clozeIndex?: number | null; // For cloze deletion cards - which cloze number
 }
 
 // --------------------------------------------

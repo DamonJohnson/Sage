@@ -65,6 +65,7 @@ export function initializeDatabase() {
       back_image TEXT,
       card_type TEXT DEFAULT 'flashcard',
       options TEXT,
+      cloze_index INTEGER,
       position INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
@@ -234,6 +235,11 @@ export function initializeDatabase() {
   // Migration: Add explanation column to cards
   try {
     db.exec(`ALTER TABLE cards ADD COLUMN explanation TEXT`);
+  } catch (e) { /* Column already exists */ }
+
+  // Migration: Add cloze_index column to cards (for cloze deletion cards)
+  try {
+    db.exec(`ALTER TABLE cards ADD COLUMN cloze_index INTEGER`);
   } catch (e) { /* Column already exists */ }
 
   // Seed demo users for social features (insert if they don't exist)

@@ -28,7 +28,7 @@ const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB max file size
+    fileSize: 500 * 1024 * 1024, // 500MB max file size
   },
   fileFilter: (_req, file, cb) => {
     // Accept .apkg files (which are actually ZIP files)
@@ -59,11 +59,242 @@ interface AnkiModel {
   flds: Array<{ name: string }>;
 }
 
+interface ImportedCard {
+  front: string;
+  back: string;
+  frontImage?: string | null;
+  backImage?: string | null;
+  cardType?: 'flashcard' | 'cloze';
+  clozeIndex?: number | null;
+}
+
+/**
+ * Check if text contains cloze deletion syntax
+ */
+function hasClozeDelections(text: string): boolean {
+  return /\{\{c\d+::[^}]+\}\}/i.test(text);
+}
+
+/**
+ * Get all unique cloze numbers from text
+ */
+function getClozeNumbers(text: string): number[] {
+  const matches = text.match(/\{\{c(\d+)::/gi);
+  if (!matches) return [];
+
+  const numbers = new Set<number>();
+  for (const match of matches) {
+    const num = parseInt(match.match(/\d+/)?.[0] || '1');
+    numbers.add(num);
+  }
+  return Array.from(numbers).sort((a, b) => a - b);
+}
+
+/**
+ * Create cloze card for a specific cloze number
+ * For the tested cloze, show [...] or [hint]
+ * For other clozes, show the answer
+ */
+function createClozeCard(text: string, clozeNum: number): { front: string; back: string } {
+  // Extract the answer for the tested cloze (for back of card)
+  let answer = '';
+  const answerRegex = new RegExp(`\\{\\{c${clozeNum}::([^:}]+)(?:::[^}]*)?\\}\\}`, 'gi');
+  const answerMatch = answerRegex.exec(text);
+  if (answerMatch) {
+    answer = answerMatch[1];
+  }
+
+  // Create front: replace tested cloze with [...] or [hint], reveal others
+  let front = text;
+
+  // First, replace the tested cloze with blank/hint
+  front = front.replace(
+    new RegExp(`\\{\\{c${clozeNum}::([^:}]+)(?:::([^}]*))?\\}\\}`, 'gi'),
+    (_, _answer, hint) => hint ? `[${hint}]` : '[...]'
+  );
+
+  // Then, reveal all other clozes (show the answer)
+  front = front.replace(/\{\{c\d+::([^:}]+)(?:::[^}]*)?\}\}/gi, '$1');
+
+  return { front, back: answer };
+}
+
+/**
+ * Extract image from HTML and return base64 data
+ */
+function extractImageFromHtml(html: string, mediaMap: Record<string, string>, mediaDir: string): string | null {
+  if (!html) return null;
+
+  const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  let match;
+
+  while ((match = imgRegex.exec(html)) !== null) {
+    const imgSrc = match[1];
+
+    // Find the numeric key that maps to this filename
+    let numericKey: string | null = null;
+    for (const [key, value] of Object.entries(mediaMap)) {
+      if (value === imgSrc) {
+        numericKey = key;
+        break;
+      }
+    }
+
+    // Build list of paths to try
+    const possiblePaths: string[] = [];
+    if (numericKey) {
+      possiblePaths.push(path.join(mediaDir, numericKey));
+    }
+    possiblePaths.push(path.join(mediaDir, imgSrc));
+    if (!path.extname(imgSrc)) {
+      possiblePaths.push(path.join(mediaDir, imgSrc + '.jpg'));
+      possiblePaths.push(path.join(mediaDir, imgSrc + '.png'));
+    }
+
+    for (const mediaPath of possiblePaths) {
+      try {
+        if (fs.existsSync(mediaPath)) {
+          const fileBuffer = fs.readFileSync(mediaPath);
+          const originalName = numericKey ? mediaMap[numericKey] : imgSrc;
+          const ext = path.extname(originalName).toLowerCase() || '.jpg';
+          const mimeType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : ext === '.svg' ? 'image/svg+xml' : 'image/jpeg';
+          return `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+        }
+      } catch {
+        // Continue trying other paths
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Strip HTML tags and decode entities
+ */
+function stripHtmlTags(html: string): string {
+  if (!html) return '';
+
+  let text = html.replace(/<img[^>]*>/gi, ''); // Remove img tags first
+  text = text.replace(/<[^>]*>/g, '');
+
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+
+  // Normalize whitespace
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Extract images from HTML content and return the image reference and cleaned text
+ */
+function extractImagesFromHtml(html: string, mediaMap: Record<string, string>, mediaDir: string): { text: string; image: string | null } {
+  if (!html) return { text: '', image: null };
+
+  const image = extractImageFromHtml(html, mediaMap, mediaDir);
+  let text = stripHtmlTags(html);
+
+  // Note: We do NOT convert cloze syntax here - that's handled separately for cloze cards
+  // For non-cloze cards, we show cloze answers in brackets
+  if (!hasClozeDelections(html)) {
+    // Not a cloze card, no conversion needed
+  }
+
+  return { text, image };
+}
+
+/**
+ * Process Anki note and create card(s)
+ * Handles cloze deletions by creating multiple cards from one note
+ */
+function processAnkiNote(
+  fields: string[],
+  mediaMap: Record<string, string>,
+  mediaDir: string
+): ImportedCard[] {
+  const cards: ImportedCard[] = [];
+
+  if (fields.length === 0) return cards;
+
+  const rawFront = fields[0] || '';
+  const rawBack = fields.length > 1 ? fields[1] : '';
+
+  // Extract images
+  const frontImage = extractImageFromHtml(rawFront, mediaMap, mediaDir);
+  const backImage = extractImageFromHtml(rawBack, mediaMap, mediaDir);
+
+  // Check if this is a cloze deletion note
+  const isCloze = hasClozeDelections(rawFront);
+
+  if (isCloze) {
+    // Create a separate card for each cloze number
+    const cleanFront = stripHtmlTags(rawFront);
+    const clozeNumbers = getClozeNumbers(cleanFront);
+
+    for (const clozeNum of clozeNumbers) {
+      const { front, back } = createClozeCard(cleanFront, clozeNum);
+
+      if (front.trim() && back.trim()) {
+        cards.push({
+          front: front.trim(),
+          back: back.trim(),
+          frontImage,
+          backImage,
+          cardType: 'cloze',
+          clozeIndex: clozeNum,
+        });
+      }
+    }
+  } else {
+    // Regular flashcard
+    let front = stripHtmlTags(rawFront);
+    let back = stripHtmlTags(rawBack);
+
+    // If there are any stray cloze markers (shouldn't happen), convert them
+    front = front.replace(/\{\{c\d+::([^:}]+)(?:::[^}]*)?\}\}/gi, '[$1]');
+    back = back.replace(/\{\{c\d+::([^:}]+)(?:::[^}]*)?\}\}/gi, '[$1]');
+
+    if (front.trim() || frontImage) {
+      cards.push({
+        front: front.trim(),
+        back: back.trim(),
+        frontImage,
+        backImage,
+        cardType: 'flashcard',
+        clozeIndex: null,
+      });
+    }
+  }
+
+  return cards;
+}
+
 /**
  * Import an APKG file (Anki deck package)
+ * Supports both Anki 2.0 (collection.anki2) and Anki 2.1+ (collection.anki21) formats
  * POST /api/import/apkg
  */
-router.post('/apkg', devAuth, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/apkg', devAuth, (req: Request, res: Response, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(400).json({
+        success: false,
+        error: err.message || 'File upload failed',
+      });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
   const tempDir = path.join(os.tmpdir(), `apkg-${uuid()}`);
 
   try {
@@ -83,43 +314,103 @@ router.post('/apkg', devAuth, upload.single('file'), async (req: Request, res: R
     const zip = new AdmZip(req.file.buffer);
     zip.extractAllTo(tempDir, true);
 
-    // Find the SQLite database (collection.anki2 or collection.anki21)
-    const dbFiles = fs.readdirSync(tempDir).filter(f =>
+    const extractedFiles = fs.readdirSync(tempDir);
+    console.log('APKG contents:', extractedFiles);
+
+    // Find the SQLite database - support multiple formats
+    // Anki 2.0: collection.anki2
+    // Anki 2.1+: collection.anki21 or collection.anki2
+    const dbFiles = extractedFiles.filter(f =>
       f === 'collection.anki2' || f === 'collection.anki21'
     );
 
     if (dbFiles.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid APKG file: No Anki collection database found',
+        error: 'Invalid APKG file: No Anki collection database found. Supported formats: Anki 2.0+',
       });
     }
 
-    const dbPath = path.join(tempDir, dbFiles[0]);
+    // Prefer newer format if both exist
+    const dbFileName = dbFiles.includes('collection.anki21') ? 'collection.anki21' : dbFiles[0];
+    const dbPath = path.join(tempDir, dbFileName);
+    console.log('Using database:', dbFileName);
+
     const ankiDb = new Database(dbPath, { readonly: true });
 
-    // Get deck name from the 'decks' column in 'col' table
+    // Load media mapping (maps numeric filenames to original names)
+    let mediaMap: Record<string, string> = {};
+    const mediaJsonPath = path.join(tempDir, 'media');
+    if (fs.existsSync(mediaJsonPath)) {
+      try {
+        const mediaContent = fs.readFileSync(mediaJsonPath, 'utf8');
+        mediaMap = JSON.parse(mediaContent);
+        console.log('Loaded media map with', Object.keys(mediaMap).length, 'entries');
+        // Log a few sample entries for debugging
+        const sampleEntries = Object.entries(mediaMap).slice(0, 3);
+        console.log('Sample media map entries:', sampleEntries);
+      } catch (e) {
+        console.log('Could not parse media file:', e);
+      }
+    }
+
+    // Check what media files actually exist in the directory
+    const mediaFiles = extractedFiles.filter(f => !f.includes('collection.anki') && f !== 'media');
+    console.log('Media files in directory (first 5):', mediaFiles.slice(0, 5));
+
+    // Get deck name - try different methods for different Anki versions
     let deckName = 'Imported Deck';
+
+    // Method 1: Try 'decks' table (Anki 2.1.28+)
     try {
-      const colRow = ankiDb.prepare('SELECT decks FROM col').get() as { decks: string } | undefined;
-      if (colRow?.decks) {
-        const decksData = JSON.parse(colRow.decks);
-        // Get the first non-default deck name
-        const deckIds = Object.keys(decksData).filter(id => id !== '1');
-        if (deckIds.length > 0) {
-          deckName = decksData[deckIds[0]].name || 'Imported Deck';
+      const tables = ankiDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+      const tableNames = tables.map(t => t.name);
+      console.log('Available tables:', tableNames);
+
+      if (tableNames.includes('decks')) {
+        // New format: separate decks table
+        const deckRow = ankiDb.prepare('SELECT name FROM decks WHERE id != 1 LIMIT 1').get() as { name: string } | undefined;
+        if (deckRow?.name) {
+          deckName = deckRow.name;
+        }
+      } else if (tableNames.includes('col')) {
+        // Old format: decks stored in col table as JSON
+        const colRow = ankiDb.prepare('SELECT decks FROM col').get() as { decks: string } | undefined;
+        if (colRow?.decks) {
+          const decksData = JSON.parse(colRow.decks);
+          const deckIds = Object.keys(decksData).filter(id => id !== '1');
+          if (deckIds.length > 0) {
+            deckName = decksData[deckIds[0]].name || 'Imported Deck';
+          }
         }
       }
     } catch (e) {
       console.log('Could not extract deck name:', e);
     }
 
-    // Get models (note types) to understand field structure
+    // Get models (note types) - try different methods
     let models: Record<string, AnkiModel> = {};
     try {
-      const colRow = ankiDb.prepare('SELECT models FROM col').get() as { models: string } | undefined;
-      if (colRow?.models) {
-        models = JSON.parse(colRow.models);
+      const tables = ankiDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+      const tableNames = tables.map(t => t.name);
+
+      if (tableNames.includes('notetypes')) {
+        // New format: separate notetypes table
+        const notetypeRows = ankiDb.prepare('SELECT id, name, flds FROM notetypes').all() as { id: number; name: string; flds: string }[];
+        for (const row of notetypeRows) {
+          try {
+            const flds = JSON.parse(row.flds);
+            models[String(row.id)] = { name: row.name, flds };
+          } catch {
+            models[String(row.id)] = { name: row.name, flds: [] };
+          }
+        }
+      } else if (tableNames.includes('col')) {
+        // Old format: models stored in col table as JSON
+        const colRow = ankiDb.prepare('SELECT models FROM col').get() as { models: string } | undefined;
+        if (colRow?.models) {
+          models = JSON.parse(colRow.models);
+        }
       }
     } catch (e) {
       console.log('Could not extract models:', e);
@@ -127,36 +418,22 @@ router.post('/apkg', devAuth, upload.single('file'), async (req: Request, res: R
 
     // Extract notes (cards)
     const notes = ankiDb.prepare('SELECT flds, mid FROM notes').all() as AnkiNote[];
+    console.log('Found', notes.length, 'notes');
 
-    const cards: Array<{ front: string; back: string }> = [];
+    const cards: ImportedCard[] = [];
 
     for (const note of notes) {
       // Fields are separated by \x1f (field separator)
       const fields = note.flds.split('\x1f');
 
-      // Get the model (note type) for this note
-      const model = models[String(note.mid)];
-      let front = '';
-      let back = '';
-
-      if (fields.length >= 2) {
-        // Most cards have at least 2 fields: front and back
-        front = stripHtml(fields[0]);
-        back = stripHtml(fields[1]);
-      } else if (fields.length === 1) {
-        // Single field - use it as front, leave back empty
-        front = stripHtml(fields[0]);
-        back = '';
-      }
-
-      // Only add if we have at least a front
-      if (front.trim()) {
-        cards.push({
-          front: front.trim(),
-          back: back.trim(),
-        });
-      }
+      // Process note and potentially create multiple cards (for cloze deletions)
+      const processedCards = processAnkiNote(fields, mediaMap, tempDir);
+      cards.push(...processedCards);
     }
+
+    const clozeCards = cards.filter(c => c.cardType === 'cloze').length;
+    const regularCards = cards.filter(c => c.cardType !== 'cloze').length;
+    console.log(`Processed into ${cards.length} cards (${clozeCards} cloze, ${regularCards} regular)`)
 
     ankiDb.close();
 
@@ -169,6 +446,9 @@ router.post('/apkg', devAuth, upload.single('file'), async (req: Request, res: R
         error: 'No cards found in the APKG file',
       });
     }
+
+    const cardsWithImages = cards.filter(c => c.frontImage || c.backImage).length;
+    console.log(`Successfully imported ${cards.length} cards (${cardsWithImages} with images)`);
 
     res.json({
       success: true,
@@ -191,7 +471,7 @@ router.post('/apkg', devAuth, upload.single('file'), async (req: Request, res: R
 
     res.status(500).json({
       success: false,
-      error: 'Failed to parse APKG file',
+      error: `Failed to parse APKG file: ${error instanceof Error ? error.message : 'Unknown error'}`,
     });
   }
 });
