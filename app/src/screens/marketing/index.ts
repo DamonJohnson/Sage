@@ -1,0 +1,1 @@
+export { WaitlistLandingPage } from './WaitlistLandingPage';

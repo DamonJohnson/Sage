@@ -1,0 +1,602 @@
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Platform,
+  Animated,
+  Dimensions,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+
+import { RadiatingLogo } from '@/components/ui';
+import { useThemedColors } from '@/hooks/useThemedColors';
+import { useResponsive } from '@/hooks/useResponsive';
+import { useTheme } from '@/contexts/ThemeContext';
+import { spacing, typography, borderRadius, shadows } from '@/theme';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Creation modes
+const CREATION_MODES = [
+  { icon: 'sparkles-outline' as const, title: 'AI Generation', desc: 'Just describe what you want to learn' },
+  { icon: 'document-text-outline' as const, title: 'Lecture Slides (PDF)', desc: 'Cards in 30 seconds' },
+  { icon: 'camera-outline' as const, title: 'Textbook Photo', desc: 'Key concepts extracted' },
+  { icon: 'cloud-download-outline' as const, title: 'Existing Anki Decks', desc: 'One-click import, nothing lost' },
+];
+
+// Card types
+const CARD_TYPES = [
+  { icon: 'swap-horizontal-outline' as const, title: 'Classic Flashcards', desc: 'Definitions and quick recall' },
+  { icon: 'ellipsis-horizontal-outline' as const, title: 'Cloze Deletions', desc: 'Fill-in-the-blank for pathways and lists' },
+];
+
+// Pricing
+const FREE_FEATURES = ['20 AI cards/month', 'Basic image occlusion', 'Spaced repetition', 'Anki import', 'Community decks'];
+const PRO_FEATURES = ['Unlimited AI generation', 'All card types', 'All creation modes', 'Full community access', 'Advanced analytics'];
+
+// FAQ
+const FAQ_DATA = [
+  { q: 'Works with Anki?', a: 'Yes. One-click .apkg import, keeps your scheduling data.' },
+  { q: 'What if AI gets it wrong?', a: 'Edit any card anytime. You are in control.' },
+  { q: 'Is my data private?', a: 'Encrypted, never shared, not used for AI training.' },
+  { q: "What is in the deck library?", a: 'Anatomy, pharm, path, physiology. Growing weekly.' },
+  { q: "What if it is not for me?", a: '30-day refund. No questions.' },
+];
+
+// Waitlist Form
+function WaitlistForm({ colors, accent, variant = 'default' }: { colors: any; accent: any; variant?: 'default' | 'hero' | 'final' }) {
+  const [email, setEmail] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const { isDesktop } = useResponsive();
+
+  if (submitted) {
+    return (
+      <View style={[styles.successBox, variant === 'final' && { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+        <Ionicons name="checkmark-circle" size={40} color={variant === 'final' ? '#fff' : accent.green} />
+        <Text style={[styles.successTitle, { color: variant === 'final' ? '#fff' : colors.textPrimary }]}>You are in!</Text>
+        <Text style={[styles.successText, { color: variant === 'final' ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]}>Check your inbox for confirmation.</Text>
+      </View>
+    );
+  }
+
+  const inputStyle = variant === 'final'
+    ? [styles.emailInput, { backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }]
+    : [styles.emailInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }];
+
+  return (
+    <View style={styles.formWrapper}>
+      <View style={[styles.formRow, !isDesktop && styles.formRowMobile]}>
+        <TextInput
+          style={inputStyle}
+          placeholder="Enter your email"
+          placeholderTextColor={variant === 'final' ? 'rgba(255,255,255,0.5)' : colors.textSecondary}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <TouchableOpacity
+          style={[styles.submitBtn, { backgroundColor: variant === 'final' ? '#fff' : accent.orange }]}
+          onPress={() => email.includes('@') && setSubmitted(true)}
+          activeOpacity={0.9}
+        >
+          <Text style={[styles.submitBtnText, { color: variant === 'final' ? accent.orange : '#fff' }]}>Claim Your Founding Spot</Text>
+          <Ionicons name="arrow-forward" size={16} color={variant === 'final' ? accent.orange : '#fff'} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// FAQ Item
+function FAQItem({ q, a, colors }: { q: string; a: string; colors: any }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <TouchableOpacity
+      style={[styles.faqItem, { backgroundColor: colors.background, borderColor: colors.border }]}
+      onPress={() => setOpen(!open)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.faqHeader}>
+        <Text style={[styles.faqQ, { color: colors.textPrimary }]}>{q}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
+      </View>
+      {open && <Text style={[styles.faqA, { color: colors.textSecondary }]}>{a}</Text>}
+    </TouchableOpacity>
+  );
+}
+
+// Counter
+function SpotsCounter({ colors, accent }: { colors: any; accent: any }) {
+  const remaining = 127;
+  const total = 500;
+  const pct = ((total - remaining) / total) * 100;
+
+  return (
+    <View style={styles.counterWrap}>
+      <View style={[styles.progressBg, { backgroundColor: colors.border }]}>
+        <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: accent.orange }]} />
+      </View>
+      <Text style={[styles.counterText, { color: colors.textSecondary }]}>
+        <Text style={{ color: accent.orange, fontWeight: '700' }}>{remaining}</Text> of {total} spots left
+      </Text>
+    </View>
+  );
+}
+
+export function WaitlistLandingPage() {
+  const insets = useSafeAreaInsets();
+  const { background, surface, surfaceHover, textPrimary, textSecondary, accent, border } = useThemedColors();
+  const { isDesktop, isTablet } = useResponsive();
+  const { isDark } = useTheme();
+  const colors = { background, surface, surfaceHover, textPrimary, textSecondary, border };
+
+  const heroHeight = SCREEN_HEIGHT - insets.top - insets.bottom;
+  const containerMaxWidth = isDesktop ? 1200 : isTablet ? 900 : '100%';
+  const featureColumns = isDesktop ? 4 : isTablet ? 2 : 1;
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const scrollToSignup = () => {
+    if (Platform.OS === 'web') {
+      document.getElementById('signup')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const webButtonStyle = Platform.OS === 'web' ? { cursor: 'pointer' as const } as any : {};
+
+  return (
+    <ScrollView style={[styles.container, { backgroundColor: background }]} showsVerticalScrollIndicator={false}>
+      {/* HERO */}
+      <View style={[styles.heroSection, { paddingTop: insets.top + spacing[4], minHeight: heroHeight }]}>
+        <LinearGradient
+          colors={isDark
+            ? ['rgba(244, 122, 58, 0.15)', 'rgba(244, 122, 58, 0.05)', 'transparent']
+            : ['rgba(244, 122, 58, 0.2)', 'rgba(244, 122, 58, 0.08)', 'transparent']
+          }
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+
+        {/* Nav */}
+        <View style={[styles.nav, { maxWidth: containerMaxWidth }]}>
+          <View style={styles.logoContainer}>
+            <RadiatingLogo accentColor={accent.orange} size="medium" />
+            <Text style={[styles.logoText, { color: textPrimary }]}>Sage</Text>
+          </View>
+          <TouchableOpacity style={[styles.navCta, { backgroundColor: accent.orange }, webButtonStyle]} onPress={scrollToSignup}>
+            <Text style={styles.navCtaText}>Join Waitlist</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Hero Content */}
+        <Animated.View style={[styles.heroContent, { maxWidth: containerMaxWidth, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <View style={styles.heroTextContainer}>
+            <Text style={[styles.heroTitle, { color: textPrimary }, isDesktop && styles.heroTitleDesktop]}>
+              Turn 6 Hours of Card-Making Into{' '}
+              <Text style={{ color: accent.orange }}>30 Seconds</Text>
+            </Text>
+            <Text style={[styles.heroSubtitle, { color: textSecondary }]}>
+              Upload your lecture slides. Get study-ready flashcards instantly.
+            </Text>
+            <Text style={[styles.heroBody, { color: textSecondary }]}>
+              You know flashcards work. But you are spending entire evenings making cards instead of learning them. Your exam date is not moving.
+            </Text>
+            <Text style={[styles.socialProof, { color: accent.orange }]}>
+              373 med students have already claimed their spot.
+            </Text>
+            <View style={styles.heroCTAContainer}>
+              <TouchableOpacity style={[styles.primaryCTA, { backgroundColor: accent.orange }, webButtonStyle]} onPress={scrollToSignup} activeOpacity={0.9}>
+                <Text style={styles.primaryCTAText}>Claim Your Founding Spot</Text>
+                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={[styles.freeNote, { color: textSecondary }]}>Free to join the waitlist</Text>
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+
+      {/* CREATION MODES */}
+      <View style={[styles.section, { backgroundColor: surface }]}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <Text style={[styles.sectionLabel, { color: accent.orange }]}>CARD CREATION</Text>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Multiple Ways to Build Your Deck</Text>
+          <Text style={[styles.sectionSubtitle, { color: textSecondary }]}>
+            Just tell Sage what you want to learn and AI creates the cards. Or upload your own materials.
+          </Text>
+
+          <View style={[styles.featureGrid, { flexDirection: featureColumns > 1 ? 'row' : 'column' }]}>
+            {CREATION_MODES.map((mode, index) => (
+              <View
+                key={index}
+                style={[styles.featureCard, { width: featureColumns > 1 ? `${100 / featureColumns - 2}%` : '100%', backgroundColor: background, borderColor: border }]}
+              >
+                <View style={[styles.featureIconContainer, { backgroundColor: accent.orange + '15' }]}>
+                  <Ionicons name={mode.icon} size={24} color={accent.orange} />
+                </View>
+                <Text style={[styles.featureTitle, { color: textPrimary }]}>{mode.title}</Text>
+                <Text style={[styles.featureDescription, { color: textSecondary }]}>{mode.desc}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* CARD TYPES */}
+      <View style={[styles.section, { backgroundColor: background }]}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <Text style={[styles.sectionLabel, { color: accent.orange }]}>CARD TYPES</Text>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>The Right Card for Every Concept</Text>
+
+          <View style={[styles.cardTypesGrid, { flexDirection: isDesktop || isTablet ? 'row' : 'column' }]}>
+            {CARD_TYPES.map((cardType, index) => (
+              <View key={index} style={[styles.cardTypeCard, { width: isDesktop || isTablet ? '48%' : '100%', backgroundColor: surface, borderColor: border }]}>
+                <View style={[styles.cardTypeIconContainer, { backgroundColor: accent.orange + '15' }]}>
+                  <Ionicons name={cardType.icon} size={32} color={accent.orange} />
+                </View>
+                <Text style={[styles.cardTypeTitle, { color: textPrimary }]}>{cardType.title}</Text>
+                <Text style={[styles.cardTypeDescription, { color: textSecondary }]}>{cardType.desc}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.moreCardTypes}>
+            {[
+              { icon: 'image-outline', name: 'Image Cards', desc: 'Label anatomy, histology, radiology' },
+              { icon: 'checkbox-outline', name: 'Multiple Choice', desc: 'Practice in exam format' },
+            ].map((type, i) => (
+              <View key={i} style={styles.moreCardTypeRow}>
+                <Ionicons name={type.icon as any} size={20} color={accent.orange} />
+                <Text style={[styles.moreCardTypeText, { color: textPrimary }]}>
+                  <Text style={{ fontWeight: '600' }}>{type.name}</Text> — {type.desc}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* SMART SCHEDULING */}
+      <View style={[styles.section, { backgroundColor: surface }]}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <Text style={[styles.sectionLabel, { color: accent.orange }]}>SMART SCHEDULING</Text>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Study Less. Remember More.</Text>
+          <Text style={[styles.sectionSubtitle, { color: textSecondary }]}>
+            Sage shows you cards exactly when you are about to forget them. Track retention by deck, identify weak cards, and know where you stand before exam day.
+          </Text>
+          <Text style={[styles.tagline, { color: accent.orange }]}>No more guessing. You will have the data.</Text>
+        </View>
+      </View>
+
+      {/* COMMUNITY */}
+      <View style={[styles.section, { backgroundColor: background }]}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <Text style={[styles.sectionLabel, { color: accent.orange }]}>COMMUNITY</Text>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Do Not Start From Zero</Text>
+          <Text style={[styles.sectionSubtitle, { color: textSecondary }]}>
+            Access 500+ community-created decks for anatomy, pharmacology, pathology, and more. Download, customise, or share your own.
+          </Text>
+
+          <View style={[styles.ankiCard, { backgroundColor: surface, borderColor: border }]}>
+            <Ionicons name="swap-horizontal" size={28} color={accent.orange} />
+            <Text style={[styles.ankiTitle, { color: textPrimary }]}>Already Using Anki?</Text>
+            <Text style={[styles.ankiBody, { color: textSecondary }]}>
+              Import your .apkg files in one click. Cards, scheduling data, and tags all transfer. Setup takes 2 minutes.
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* SOCIAL PROOF */}
+      <View style={[styles.section, { backgroundColor: surface }]}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <View style={[styles.testimonial, { borderColor: accent.orange }]}>
+            <Text style={[styles.quote, { color: textPrimary }]}>
+              "I was spending 2-3 hours after every lecture making cards. Now I upload the slides and I am studying within a minute."
+            </Text>
+            <Text style={[styles.quoteAttr, { color: textSecondary }]}>— Beta tester, UQ</Text>
+          </View>
+
+          <View style={styles.statsRow}>
+            {[
+              { num: '12,000+', label: 'cards generated' },
+              { num: '4+ hrs', label: 'saved per week' },
+              { num: '15+', label: 'Australian unis' },
+            ].map((stat, i) => (
+              <View key={i} style={styles.statItem}>
+                <Text style={[styles.statNum, { color: accent.orange }]}>{stat.num}</Text>
+                <Text style={[styles.statLabel, { color: textSecondary }]}>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* PRICING */}
+      <View style={[styles.section, { backgroundColor: background }]}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <Text style={[styles.sectionLabel, { color: accent.orange }]}>PRICING</Text>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Simple Plans</Text>
+
+          <View style={[styles.pricingRow, !isDesktop && styles.pricingRowStack]}>
+            <View style={[styles.priceCard, { backgroundColor: surface, borderColor: border }]}>
+              <Text style={[styles.tierName, { color: textPrimary }]}>Free</Text>
+              <Text style={[styles.price, { color: textPrimary }]}>$0</Text>
+              <View style={styles.priceFeatures}>
+                {FREE_FEATURES.map((f, i) => (
+                  <View key={i} style={styles.priceFeatureRow}>
+                    <Ionicons name="checkmark" size={16} color={accent.green} />
+                    <Text style={[styles.priceFeatureText, { color: textSecondary }]}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={[styles.priceCard, styles.priceCardPro, { backgroundColor: surface, borderColor: accent.orange }]}>
+              <View style={[styles.badge, { backgroundColor: accent.orange }]}>
+                <Text style={styles.badgeText}>Most Popular</Text>
+              </View>
+              <Text style={[styles.tierName, { color: textPrimary }]}>Pro</Text>
+              <View style={styles.priceWrap}>
+                <Text style={[styles.priceOld, { color: textSecondary }]}>$149</Text>
+                <Text style={[styles.price, { color: textPrimary }]}>$79<Text style={styles.priceUnit}>/yr</Text></Text>
+              </View>
+              <Text style={[styles.priceMonthly, { color: textSecondary }]}>$6.58/month</Text>
+              <View style={styles.priceFeatures}>
+                {PRO_FEATURES.map((f, i) => (
+                  <View key={i} style={styles.priceFeatureRow}>
+                    <Ionicons name="checkmark" size={16} color={accent.green} />
+                    <Text style={[styles.priceFeatureText, { color: textSecondary }]}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={[styles.guarantee, { color: textSecondary }]}>30-day money-back guarantee</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* FOUNDING MEMBERS */}
+      <View style={[styles.section, { backgroundColor: surface }]} {...(Platform.OS === 'web' ? { nativeID: 'signup' } : {})}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Join the Founding 500</Text>
+          <Text style={[styles.sectionSubtitle, { color: textSecondary }]}>
+            $79/year locked for life. After 500 spots, price goes to $149—permanently.
+          </Text>
+
+          <View style={styles.checkList}>
+            {['Beta access now', '$79/year forever', 'Direct input on features', 'Founding Member badge'].map((c, i) => (
+              <View key={i} style={styles.checkRow}>
+                <Ionicons name="checkmark-circle" size={20} color={accent.green} />
+                <Text style={[styles.checkText, { color: textPrimary }]}>{c}</Text>
+              </View>
+            ))}
+          </View>
+
+          <SpotsCounter colors={colors} accent={accent} />
+          <WaitlistForm colors={colors} accent={accent} />
+        </View>
+      </View>
+
+      {/* COMPARISON */}
+      <View style={[styles.section, { backgroundColor: background }]}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>What If You Wait?</Text>
+
+          <View style={[styles.compareTable, { borderColor: border }]}>
+            <View style={[styles.compareHeader, { backgroundColor: surfaceHover }]}>
+              <Text style={[styles.compareHeaderText, { color: accent.green }]}>Now</Text>
+              <Text style={[styles.compareHeaderText, { color: textSecondary }]}>Later</Text>
+            </View>
+            {[
+              ['$79/year forever', '$149/year'],
+              ['Beta access this week', 'Waitlist'],
+              ['Vote on features', 'Features ship without you'],
+              ['373 already in', '127 spots left'],
+            ].map((row, i) => (
+              <View key={i} style={[styles.compareRow, { borderTopColor: border }]}>
+                <Text style={[styles.compareNow, { color: accent.green }]}>{row[0]}</Text>
+                <Text style={[styles.compareLater, { color: textSecondary }]}>{row[1]}</Text>
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity style={[styles.ctaBtn, { backgroundColor: accent.orange }, webButtonStyle]} onPress={scrollToSignup}>
+            <Text style={styles.ctaBtnText}>Claim Your Founding Spot</Text>
+            <Ionicons name="arrow-forward" size={16} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* FAQ */}
+      <View style={[styles.section, { backgroundColor: surface }]}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>FAQ</Text>
+          <View style={styles.faqList}>
+            {FAQ_DATA.map((f, i) => (
+              <FAQItem key={i} q={f.q} a={f.a} colors={colors} />
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* FINAL CTA */}
+      <View style={[styles.finalCTASection, { backgroundColor: background }]}>
+        <LinearGradient
+          colors={[accent.orange, '#E85D2B']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.finalCTAGradient, { maxWidth: isDesktop ? 900 : '100%' }]}
+        >
+          <Text style={styles.finalCTATitle}>Stop Making Cards. Start Studying.</Text>
+          <Text style={styles.finalCTASub}>127 Founding Member spots left.</Text>
+          <WaitlistForm colors={colors} accent={accent} variant="final" />
+          <Text style={styles.noSpam}>Free to join • No spam • Unsubscribe anytime</Text>
+        </LinearGradient>
+      </View>
+
+      {/* FOOTER */}
+      <View style={[styles.footer, { backgroundColor: surface, borderTopColor: border }]}>
+        <View style={[styles.footerContent, { maxWidth: containerMaxWidth }]}>
+          <View style={styles.footerLogo}>
+            <RadiatingLogo accentColor={accent.orange} size="small" />
+            <Text style={[styles.footerLogoText, { color: textPrimary }]}>Sage</Text>
+          </View>
+          <Text style={[styles.footerCopyright, { color: textSecondary }]}>© 2025 Sage. All rights reserved.</Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+
+  // Hero
+  heroSection: { paddingHorizontal: spacing[6], paddingBottom: spacing[8], overflow: 'hidden', position: 'relative' },
+  nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing[4], alignSelf: 'center', width: '100%' },
+  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  logoText: { fontSize: typography.sizes['2xl'], fontWeight: '800' },
+  navCta: { paddingVertical: spacing[2], paddingHorizontal: spacing[5], borderRadius: borderRadius.md },
+  navCtaText: { color: '#FFFFFF', fontSize: typography.sizes.base, fontWeight: '600' },
+  heroContent: { marginTop: spacing[8], alignSelf: 'center', width: '100%' },
+  heroTextContainer: { maxWidth: 600, alignSelf: 'center', alignItems: 'center' },
+  heroTitle: { fontSize: 32, fontWeight: '800', lineHeight: 40, marginBottom: spacing[4], textAlign: 'center' },
+  heroTitleDesktop: { fontSize: 48, lineHeight: 56 },
+  heroSubtitle: { fontSize: typography.sizes.lg, lineHeight: 28, marginBottom: spacing[3], textAlign: 'center' },
+  heroBody: { fontSize: typography.sizes.base, lineHeight: 24, marginBottom: spacing[4], textAlign: 'center', maxWidth: 500 },
+  socialProof: { fontSize: typography.sizes.sm, fontWeight: '600', marginBottom: spacing[6] },
+  heroCTAContainer: { gap: spacing[3], alignItems: 'center' },
+  freeNote: { fontSize: typography.sizes.sm, marginTop: spacing[2] },
+  primaryCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing[4], paddingHorizontal: spacing[8], borderRadius: borderRadius.xl, gap: spacing[2], ...shadows.lg },
+  primaryCTAText: { color: '#FFFFFF', fontSize: typography.sizes.lg, fontWeight: '600' },
+
+  // Sections
+  section: { paddingVertical: spacing[16], paddingHorizontal: spacing[6] },
+  sectionContent: { alignSelf: 'center', width: '100%' },
+  sectionLabel: { fontSize: typography.sizes.sm, fontWeight: '700', letterSpacing: 1.5, marginBottom: spacing[3], textAlign: 'center' },
+  sectionTitle: { fontSize: typography.sizes['3xl'], fontWeight: '700', textAlign: 'center', marginBottom: spacing[4] },
+  sectionSubtitle: { fontSize: typography.sizes.lg, textAlign: 'center', marginBottom: spacing[12], maxWidth: 600, alignSelf: 'center', lineHeight: 26 },
+  tagline: { fontSize: typography.sizes.base, fontWeight: '600', textAlign: 'center', marginTop: spacing[4] },
+
+  // Feature Grid
+  featureGrid: { flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing[5] },
+  featureCard: { padding: spacing[7], borderRadius: borderRadius['2xl'], borderWidth: 1, marginBottom: spacing[4], ...shadows.md },
+  featureIconContainer: { width: 56, height: 56, borderRadius: borderRadius.xl, justifyContent: 'center', alignItems: 'center', marginBottom: spacing[5] },
+  featureTitle: { fontSize: typography.sizes.lg, fontWeight: '600', marginBottom: spacing[2] },
+  featureDescription: { fontSize: typography.sizes.base, lineHeight: 24 },
+
+  // Card Types
+  cardTypesGrid: { justifyContent: 'space-between', gap: spacing[4], marginBottom: spacing[8] },
+  cardTypeCard: { padding: spacing[8], borderRadius: borderRadius.xl, borderWidth: 1, marginBottom: spacing[4], alignItems: 'center' },
+  cardTypeIconContainer: { width: 64, height: 64, borderRadius: borderRadius.xl, justifyContent: 'center', alignItems: 'center', marginBottom: spacing[5] },
+  cardTypeTitle: { fontSize: typography.sizes.xl, fontWeight: '600', marginBottom: spacing[3], textAlign: 'center' },
+  cardTypeDescription: { fontSize: typography.sizes.base, lineHeight: 24, textAlign: 'center', maxWidth: 300 },
+  moreCardTypes: { gap: spacing[3], maxWidth: 500, alignSelf: 'center' },
+  moreCardTypeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  moreCardTypeText: { fontSize: typography.sizes.base, flex: 1 },
+
+  // Anki Card
+  ankiCard: { padding: spacing[6], borderRadius: borderRadius.xl, borderWidth: 1, maxWidth: 500, alignSelf: 'center', alignItems: 'center' },
+  ankiTitle: { fontSize: typography.sizes.lg, fontWeight: '700', marginTop: spacing[3], marginBottom: spacing[2] },
+  ankiBody: { fontSize: typography.sizes.base, textAlign: 'center', lineHeight: 24 },
+
+  // Testimonial
+  testimonial: { borderLeftWidth: 3, paddingLeft: spacing[5], marginBottom: spacing[10], maxWidth: 550, alignSelf: 'center' },
+  quote: { fontSize: typography.sizes.xl, fontStyle: 'italic', lineHeight: 32 },
+  quoteAttr: { fontSize: typography.sizes.base, marginTop: spacing[3] },
+
+  // Stats
+  statsRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing[10], flexWrap: 'wrap' },
+  statItem: { alignItems: 'center' },
+  statNum: { fontSize: typography.sizes['3xl'], fontWeight: '800' },
+  statLabel: { fontSize: typography.sizes.sm, marginTop: spacing[1] },
+
+  // Pricing
+  pricingRow: { flexDirection: 'row', gap: spacing[6], justifyContent: 'center' },
+  pricingRowStack: { flexDirection: 'column', alignItems: 'center' },
+  priceCard: { padding: spacing[7], borderRadius: borderRadius['2xl'], borderWidth: 1, width: '100%', maxWidth: 340 },
+  priceCardPro: { borderWidth: 2, position: 'relative' },
+  badge: { position: 'absolute', top: -12, alignSelf: 'center', paddingHorizontal: spacing[4], paddingVertical: spacing[1], borderRadius: borderRadius.full },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  tierName: { fontSize: typography.sizes.xl, fontWeight: '700', textAlign: 'center', marginBottom: spacing[2] },
+  priceWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2] },
+  priceOld: { fontSize: typography.sizes.lg, textDecorationLine: 'line-through' },
+  price: { fontSize: 36, fontWeight: '800', textAlign: 'center' },
+  priceUnit: { fontSize: typography.sizes.base, fontWeight: '500' },
+  priceMonthly: { fontSize: typography.sizes.sm, textAlign: 'center', marginBottom: spacing[5] },
+  priceFeatures: { gap: spacing[3], marginTop: spacing[4] },
+  priceFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  priceFeatureText: { fontSize: typography.sizes.base },
+  guarantee: { fontSize: typography.sizes.sm, textAlign: 'center', marginTop: spacing[5], fontStyle: 'italic' },
+
+  // Founding
+  checkList: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing[4], marginBottom: spacing[8] },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  checkText: { fontSize: typography.sizes.base },
+
+  // Counter
+  counterWrap: { alignItems: 'center', marginBottom: spacing[6] },
+  progressBg: { width: '100%', maxWidth: 360, height: 8, borderRadius: 4, marginBottom: spacing[3] },
+  progressFill: { height: '100%', borderRadius: 4 },
+  counterText: { fontSize: typography.sizes.base },
+
+  // Form
+  formWrapper: { width: '100%', maxWidth: 500, alignSelf: 'center' },
+  formRow: { flexDirection: 'row', gap: spacing[3] },
+  formRowMobile: { flexDirection: 'column' },
+  emailInput: { flex: 1, borderWidth: 1, borderRadius: borderRadius.lg, paddingHorizontal: spacing[4], paddingVertical: spacing[4], fontSize: typography.sizes.base },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5], paddingVertical: spacing[4], borderRadius: borderRadius.lg, gap: spacing[2] },
+  submitBtnText: { fontSize: typography.sizes.base, fontWeight: '600' },
+  successBox: { alignItems: 'center', padding: spacing[6], borderRadius: borderRadius.xl },
+  successTitle: { fontSize: typography.sizes.xl, fontWeight: '700', marginTop: spacing[3] },
+  successText: { fontSize: typography.sizes.base, marginTop: spacing[1] },
+
+  // Compare
+  compareTable: { borderWidth: 1, borderRadius: borderRadius.xl, overflow: 'hidden', maxWidth: 450, alignSelf: 'center', width: '100%', marginBottom: spacing[8] },
+  compareHeader: { flexDirection: 'row', paddingVertical: spacing[3], paddingHorizontal: spacing[5] },
+  compareHeaderText: { flex: 1, fontSize: typography.sizes.base, fontWeight: '700', textAlign: 'center' },
+  compareRow: { flexDirection: 'row', borderTopWidth: 1, paddingVertical: spacing[4], paddingHorizontal: spacing[5] },
+  compareNow: { flex: 1, fontSize: typography.sizes.base, fontWeight: '500' },
+  compareLater: { flex: 1, fontSize: typography.sizes.base, textAlign: 'right' },
+  ctaBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing[4], paddingHorizontal: spacing[7], borderRadius: borderRadius.xl, gap: spacing[2], alignSelf: 'center', ...shadows.md },
+  ctaBtnText: { color: '#fff', fontSize: typography.sizes.base, fontWeight: '600' },
+
+  // FAQ
+  faqList: { gap: spacing[3], maxWidth: 600, alignSelf: 'center', width: '100%' },
+  faqItem: { borderRadius: borderRadius.lg, borderWidth: 1, overflow: 'hidden' },
+  faqHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing[5] },
+  faqQ: { fontSize: typography.sizes.base, fontWeight: '600', flex: 1 },
+  faqA: { fontSize: typography.sizes.base, lineHeight: 24, paddingHorizontal: spacing[5], paddingBottom: spacing[5] },
+
+  // Final CTA
+  finalCTASection: { paddingVertical: spacing[16], paddingHorizontal: spacing[6], alignItems: 'center' },
+  finalCTAGradient: { width: '100%', alignItems: 'center', paddingVertical: spacing[12], paddingHorizontal: spacing[8], borderRadius: borderRadius['2xl'], ...shadows.xl },
+  finalCTATitle: { color: '#FFFFFF', fontSize: typography.sizes['2xl'], fontWeight: '700', textAlign: 'center', marginBottom: spacing[2] },
+  finalCTASub: { color: 'rgba(255, 255, 255, 0.9)', fontSize: typography.sizes.lg, textAlign: 'center', marginBottom: spacing[6] },
+  noSpam: { color: 'rgba(255, 255, 255, 0.6)', fontSize: typography.sizes.sm, marginTop: spacing[4] },
+
+  // Footer
+  footer: { borderTopWidth: 1, paddingVertical: spacing[6], paddingHorizontal: spacing[6] },
+  footerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'center', width: '100%' },
+  footerLogo: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  footerLogoText: { fontSize: typography.sizes.base, fontWeight: '600' },
+  footerCopyright: { fontSize: typography.sizes.sm },
+});
+
+export default WaitlistLandingPage;

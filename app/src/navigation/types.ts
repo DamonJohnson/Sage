@@ -5,6 +5,7 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 
 // Root Stack
 export type RootStackParamList = {
+  Waitlist: undefined;
   Main: NavigatorScreenParams<MainTabParamList>;
   Study: { deckId: string };
   DeckDetail: { deckId: string };

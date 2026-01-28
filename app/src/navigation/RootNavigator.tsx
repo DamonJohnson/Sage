@@ -24,6 +24,7 @@ import { PublicDeckPreviewScreen } from '@/screens/discover/PublicDeckPreviewScr
 import { SocialScreen, UserProfileScreen } from '@/screens/social';
 import { ReviewScreen } from '@/screens/review';
 import { LandingScreen, LoginScreen, ProfileSetupScreen } from '@/screens/auth';
+import { WaitlistLandingPage } from '@/screens/marketing';
 import { Sidebar } from '@/components/navigation/Sidebar';
 import { OnboardingModal } from '@/components/onboarding';
 import { useResponsive } from '@/hooks/useResponsive';
@@ -43,6 +44,7 @@ const linking: LinkingOptions<RootStackParamList> = {
   ],
   config: {
     screens: {
+      Waitlist: 'waitlist',
       Main: {
         path: '',
         screens: {
@@ -123,6 +125,7 @@ function MainNavigator() {
         animation: 'slide_from_right',
       }}
     >
+      <Stack.Screen name="Waitlist" component={WaitlistLandingPage} />
       <Stack.Screen name="Main" component={TabNavigator} />
       <Stack.Screen
         name="Study"
@@ -238,6 +241,9 @@ export function RootNavigator() {
   const { isAuthenticated, needsProfileSetup, hasSeenOnboarding, checkAuthStatus, completeProfileSetup, completeOnboarding } = useAuthStore();
   const { loadDecks } = useDeckStore();
 
+  // Check if we're on the waitlist page (web only)
+  const isWaitlistPage = Platform.OS === 'web' && typeof window !== 'undefined' && window.location.pathname === '/waitlist';
+
   // Check auth status on mount
   useEffect(() => {
     checkAuthStatus();
@@ -283,6 +289,15 @@ export function RootNavigator() {
     setIsSignUp(false);
     setShowAuth(true);
   };
+
+  // Show waitlist page if on /waitlist URL (public, no auth required)
+  if (isWaitlistPage) {
+    return (
+      <NavigationContainer theme={navigationTheme}>
+        <WaitlistLandingPage />
+      </NavigationContainer>
+    );
+  }
 
   // Show landing or login screen if not authenticated
   if (!isAuthenticated) {
