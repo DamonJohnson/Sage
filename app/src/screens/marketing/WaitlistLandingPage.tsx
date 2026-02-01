@@ -427,8 +427,8 @@ export function WaitlistLandingPage() {
                 <Text style={styles.badgeText}>Best Value</Text>
               </View>
               <Text style={[styles.tierName, { color: textPrimary }]}>Pro</Text>
-              <Text style={[styles.price, { color: textPrimary }]}>$100<Text style={styles.priceUnit}>/yr</Text></Text>
-              <Text style={[styles.priceMonthly, { color: textSecondary }]}>or $15/month · $200 lifetime</Text>
+              <Text style={[styles.price, { color: textPrimary }]}>$99<Text style={styles.priceUnit}>/yr</Text></Text>
+              <Text style={[styles.priceMonthly, { color: textSecondary }]}>or $15/month · $199 lifetime</Text>
               <View style={styles.priceFeatures}>
                 {PRO_FEATURES.map((f, i) => (
                   <View key={i} style={styles.priceFeatureRow}>
@@ -448,11 +448,11 @@ export function WaitlistLandingPage() {
         <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
           <Text style={[styles.sectionTitle, { color: textPrimary }]}>Waitlist Exclusive: 50% Off Lifetime</Text>
           <Text style={[styles.sectionSubtitle, { color: textSecondary }]}>
-            Get Pro lifetime access for $100 (normally $200). Limited time offer for waitlist members only.
+            Get Pro lifetime access for $99 (normally $199). Limited time offer for waitlist members only.
           </Text>
 
           <View style={styles.checkList}>
-            {['Pro lifetime access', '$100 one-time (save $100)', 'Early beta access', 'Founding Member badge'].map((c, i) => (
+            {['Pro lifetime access', '$99 one-time (save $99)', 'Early beta access', 'Founding Member badge'].map((c, i) => (
               <View key={i} style={styles.checkRow}>
                 <View style={[styles.checkCircleSmall, { backgroundColor: accent.green }]}>
                   <Text style={styles.checkMarkSmall}>✓</Text>
