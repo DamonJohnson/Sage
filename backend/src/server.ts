@@ -30,6 +30,20 @@ if (config.nodeEnv === 'development') {
   });
 }
 
+// Production route restriction - only allow waitlist and health endpoints
+if (config.nodeEnv === 'production') {
+  app.use('/api', (req, res, next) => {
+    const allowedPaths = ['/health', '/waitlist', '/waitlist/count'];
+    const isAllowed = allowedPaths.some(path => req.path === path || req.path.startsWith(path + '/'));
+
+    if (isAllowed) {
+      next();
+    } else {
+      res.status(403).json({ success: false, error: 'Endpoint not available' });
+    }
+  });
+}
+
 // API routes
 app.use('/api', apiRouter);
 
