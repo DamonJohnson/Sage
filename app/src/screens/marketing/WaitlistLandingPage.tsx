@@ -268,6 +268,42 @@ export function WaitlistLandingPage() {
         </Animated.View>
       </View>
 
+      {/* WAITLIST SIGNUP - Primary CTA */}
+      <View style={[styles.section, { backgroundColor: surface }]} {...(Platform.OS === 'web' ? { nativeID: 'signup' } : {})}>
+        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          {/* Big Savings Badge */}
+          <View style={[styles.savingsBadge, { backgroundColor: accent.green }]}>
+            <Text style={styles.savingsBadgeText}>SAVE $100</Text>
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Waitlist Exclusive: 50% Off Lifetime</Text>
+
+          <View style={styles.priceCompare}>
+            <Text style={[styles.priceCompareOld, { color: textSecondary }]}>$199</Text>
+            <Text style={[styles.priceCompareNew, { color: accent.green }]}>$99</Text>
+            <Text style={[styles.priceCompareLabel, { color: textSecondary }]}>one-time payment</Text>
+          </View>
+
+          <Text style={[styles.sectionSubtitle, { color: textSecondary, marginTop: spacing[4] }]}>
+            Limited time offer for waitlist members only.
+          </Text>
+
+          <View style={styles.checkList}>
+            {['Pro lifetime access', 'Unlimited decks & flashcards', 'Early beta access', 'Founding Member badge'].map((c, i) => (
+              <View key={i} style={styles.checkRow}>
+                <View style={[styles.checkCircleSmall, { backgroundColor: accent.green }]}>
+                  <Text style={styles.checkMarkSmall}>✓</Text>
+                </View>
+                <Text style={[styles.checkText, { color: textPrimary }]}>{c}</Text>
+              </View>
+            ))}
+          </View>
+
+          <SpotsCounter colors={colors} accent={accent} />
+          <WaitlistForm colors={colors} accent={accent} />
+        </View>
+      </View>
+
       {/* CREATION MODES */}
       <View style={[styles.section, { backgroundColor: surface }]}>
         <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
@@ -440,42 +476,6 @@ export function WaitlistLandingPage() {
               <Text style={[styles.guarantee, { color: textSecondary }]}>30-day money-back guarantee</Text>
             </View>
           </View>
-        </View>
-      </View>
-
-      {/* FOUNDING MEMBERS */}
-      <View style={[styles.section, { backgroundColor: surface }]} {...(Platform.OS === 'web' ? { nativeID: 'signup' } : {})}>
-        <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
-          {/* Big Savings Badge */}
-          <View style={[styles.savingsBadge, { backgroundColor: accent.green }]}>
-            <Text style={styles.savingsBadgeText}>SAVE $100</Text>
-          </View>
-
-          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Waitlist Exclusive: 50% Off Lifetime</Text>
-
-          <View style={styles.priceCompare}>
-            <Text style={[styles.priceCompareOld, { color: textSecondary }]}>$199</Text>
-            <Text style={[styles.priceCompareNew, { color: accent.green }]}>$99</Text>
-            <Text style={[styles.priceCompareLabel, { color: textSecondary }]}>one-time payment</Text>
-          </View>
-
-          <Text style={[styles.sectionSubtitle, { color: textSecondary, marginTop: spacing[4] }]}>
-            Limited time offer for waitlist members only.
-          </Text>
-
-          <View style={styles.checkList}>
-            {['Pro lifetime access', 'Unlimited decks & flashcards', 'Early beta access', 'Founding Member badge'].map((c, i) => (
-              <View key={i} style={styles.checkRow}>
-                <View style={[styles.checkCircleSmall, { backgroundColor: accent.green }]}>
-                  <Text style={styles.checkMarkSmall}>✓</Text>
-                </View>
-                <Text style={[styles.checkText, { color: textPrimary }]}>{c}</Text>
-              </View>
-            ))}
-          </View>
-
-          <SpotsCounter colors={colors} accent={accent} />
-          <WaitlistForm colors={colors} accent={accent} />
         </View>
       </View>
 
