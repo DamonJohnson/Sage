@@ -188,6 +188,9 @@ export default function WaitlistLandingPage() {
             <Text style={styles.badgeText}>LIMITED TIME: 50% OFF LIFETIME</Text>
           </View>
 
+          {/* Target audience */}
+          <Text style={styles.forText}>Built for Medical Students</Text>
+
           {/* Headline */}
           <Text style={[styles.headline, isDesktop && styles.headlineDesktop]}>
             Stop Making Flashcards.{'\n'}
@@ -195,7 +198,7 @@ export default function WaitlistLandingPage() {
           </Text>
 
           <Text style={styles.subheadline}>
-            Upload lecture slides. Get study-ready cards in 30 seconds.
+            The proven way to memorise anything. Master anatomy with image occlusion, learn pharmacology with AI-generated cards, and ace your exams with spaced repetition.
           </Text>
 
           {/* Price */}
@@ -292,6 +295,7 @@ const styles = StyleSheet.create({
   badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(249, 115, 22, 0.15)', paddingHorizontal: spacing[4], paddingVertical: spacing[2], borderRadius: 100, marginBottom: spacing[6], gap: spacing[2] },
   badgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#f97316' },
   badgeText: { color: '#f97316', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  forText: { color: '#f97316', fontSize: 14, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase', marginBottom: spacing[3] },
   headline: { color: '#fff', fontSize: 36, fontWeight: '800', textAlign: 'center', lineHeight: 44, marginBottom: spacing[4] },
   headlineDesktop: { fontSize: 52, lineHeight: 60 },
   headlineAccent: { color: '#4ade80' },
