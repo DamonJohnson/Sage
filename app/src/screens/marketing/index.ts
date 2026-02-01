@@ -1,1 +1,1 @@
-export { WaitlistLandingPage } from './WaitlistLandingPage';
+export { default as WaitlistLandingPage } from './WaitlistLandingPage';
