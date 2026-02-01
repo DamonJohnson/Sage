@@ -38,5 +38,13 @@ export const config = {
   },
 
   // CORS
-  corsOrigins: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:19006', 'http://localhost:8081', 'http://localhost:8082'],
+  corsOrigins: process.env.CORS_ORIGINS?.split(',') || [
+    'http://localhost:5173',
+    'http://localhost:19006',
+    'http://localhost:8081',
+    'http://localhost:8082',
+    'https://sage-duk.pages.dev',
+    'https://sagestudy.app',
+    'https://www.sagestudy.app',
+  ],
 };
