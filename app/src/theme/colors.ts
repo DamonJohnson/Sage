@@ -1,55 +1,56 @@
 // Sage Design System
-// Grayscale-first with accent colors used sparingly
-// Primary accent: Burnt Orange #D96830 (dark) / #C05518 (light)
+// Navy blue backgrounds with orange + green accents
+// Primary accent: Burnt Orange #f97316 / Navy Blue #0f172a
 
 // Dark Mode Colors (default for first-time users)
 export const darkTheme = {
-  // Core surfaces - warm charcoal
-  background: '#1A1A1A',
-  surface: '#252525',
-  surfaceHover: '#303030',
-  border: '#3A3A3A',
+  // Core surfaces - navy blue (matching waitlist)
+  background: '#0f172a',
+  surface: '#1e293b',
+  surfaceHover: '#334155',
+  border: '#334155',
 
   // Text
   text: {
-    primary: '#EBEBEB',
-    secondary: '#A0A0A0',
+    primary: '#f1f5f9',
+    secondary: '#94a3b8',
   },
 
-  // Accent colors (use sparingly)
+  // Accent colors
   accent: {
-    orange: '#D96830',    // Primary - warm burnt orange, slightly brighter
-    green: '#4A9B7F',     // Success, mastered - sage green
-    red: '#C45454',       // Urgent/important - muted red
-    purple: '#8B7BBF',    // Multiple choice, AI features
+    orange: '#f97316',    // Primary - vibrant orange
+    green: '#4ade80',     // Success, mastered - bright green
+    red: '#f87171',       // Urgent/important
+    purple: '#a78bfa',    // AI features
+    blue: '#3b82f6',      // Secondary accent
   },
 } as const;
 
-// Light Mode Colors - Sophisticated warm neutral palette
+// Light Mode Colors - Clean with blue and orange accents
 // Design principles:
-// - Warm paper-like background reduces eye strain
-// - White cards for seamless image backgrounds
-// - Muted accent colors that don't compete with content
-// - Strong text contrast for readability
+// - Light background with navy blue accents
+// - White cards with subtle blue tints
+// - Orange and blue as complementary accents
 export const lightTheme = {
-  // Core surfaces
-  background: '#F0EDE8',      // Warm paper - like aged quality paper
-  surface: '#FFFFFF',         // Pure white cards for image compatibility
-  surfaceHover: '#F7F5F2',    // Subtle warm hover
-  border: '#D8D4CD',          // Warm grey border
+  // Core surfaces - light with blue hints
+  background: '#f8fafc',      // Very light blue-grey
+  surface: '#ffffff',         // Pure white cards
+  surfaceHover: '#f1f5f9',    // Light slate hover
+  border: '#e2e8f0',          // Light slate border
 
-  // Text - high contrast for readability
+  // Text - high contrast
   text: {
-    primary: '#1F1E1C',       // Near black with warmth
-    secondary: '#6B665D',     // Warm medium grey
+    primary: '#0f172a',       // Navy - matches dark bg
+    secondary: '#64748b',     // Slate grey
   },
 
-  // Accent colors (deeper for light backgrounds)
+  // Accent colors
   accent: {
-    orange: '#C05518',        // Burnt orange - good contrast on light bg
-    green: '#3D7A63',         // Deep sage green
-    red: '#A84040',           // Deep muted red
-    purple: '#6B5CA0',        // Deep muted purple
+    orange: '#ea580c',        // Deep orange for contrast
+    green: '#16a34a',         // Vibrant green
+    red: '#dc2626',           // Clear red
+    purple: '#7c3aed',        // Vibrant purple
+    blue: '#2563eb',          // Strong blue
   },
 } as const;
 
@@ -58,100 +59,101 @@ export type Theme = typeof darkTheme;
 
 // Legacy color mapping for backwards compatibility
 export const colors = {
-  // Primary - Burnt Orange scale
+  // Primary - Orange scale
   primary: {
-    50: '#FEF6F0',
-    100: '#FCEBE0',
-    200: '#F8D5C0',
-    300: '#F0B898',
-    400: '#E89468',
-    500: '#D96830',
-    600: '#C05518',
-    700: '#9A4412',
-    800: '#74330E',
-    900: '#4E220A',
+    50: '#fff7ed',
+    100: '#ffedd5',
+    200: '#fed7aa',
+    300: '#fdba74',
+    400: '#fb923c',
+    500: '#f97316',
+    600: '#ea580c',
+    700: '#c2410c',
+    800: '#9a3412',
+    900: '#7c2d12',
   },
 
-  // Secondary - warm coral
+  // Secondary - Blue scale
   secondary: {
-    50: '#FDF5F2',
-    100: '#FAEBE5',
-    200: '#F2D5CC',
-    300: '#E8B8AA',
-    400: '#D89580',
-    500: '#C06B50',
-    600: '#A05540',
-    700: '#804435',
-    800: '#60332A',
-    900: '#40221F',
+    50: '#f8fafc',
+    100: '#f1f5f9',
+    200: '#e2e8f0',
+    300: '#cbd5e1',
+    400: '#94a3b8',
+    500: '#64748b',
+    600: '#475569',
+    700: '#334155',
+    800: '#1e293b',
+    900: '#0f172a',
   },
 
   // Status colors for SRS states
   status: {
-    new: '#A84040',        // Muted red - new cards
-    newLight: '#FDF0F0',   // Light red tint
-    learning: '#C05518',   // Burnt orange - learning
-    learningLight: '#FEF6F0',
-    mastered: '#3D7A63',   // Sage green - mastered
-    masteredLight: '#F0F7F4',
+    new: '#f87171',        // Red - new cards
+    newLight: '#fef2f2',
+    learning: '#f97316',   // Orange - learning
+    learningLight: '#fff7ed',
+    mastered: '#4ade80',   // Green - mastered
+    masteredLight: '#f0fdf4',
   },
 
-  // Grays - warm neutral scale
+  // Grays - slate scale
   gray: {
-    50: '#FAFAF8',
-    100: '#F0EDE8',
-    200: '#E5E1DA',
-    300: '#D8D4CD',
-    400: '#A8A49C',
-    500: '#6B665D',
-    600: '#52504A',
-    700: '#3A3836',
-    800: '#1F1E1C',
-    900: '#121110',
+    50: '#f8fafc',
+    100: '#f1f5f9',
+    200: '#e2e8f0',
+    300: '#cbd5e1',
+    400: '#94a3b8',
+    500: '#64748b',
+    600: '#475569',
+    700: '#334155',
+    800: '#1e293b',
+    900: '#0f172a',
   },
 
   // Semantic
   white: '#FFFFFF',
-  black: '#121110',
+  black: '#0f172a',
 
   // Background
   background: {
-    primary: '#F0EDE8',
-    secondary: '#FFFFFF',
-    tertiary: '#E5E1DA',
+    primary: '#f8fafc',
+    secondary: '#ffffff',
+    tertiary: '#f1f5f9',
   },
 
   // Surface
-  surface: '#FFFFFF',
-  surfaceVariant: '#F7F5F2',
+  surface: '#ffffff',
+  surfaceVariant: '#f1f5f9',
 
   // Text
   text: {
-    primary: '#1F1E1C',
-    secondary: '#6B665D',
-    tertiary: '#A8A49C',
-    inverse: '#FFFFFF',
+    primary: '#0f172a',
+    secondary: '#64748b',
+    tertiary: '#94a3b8',
+    inverse: '#ffffff',
   },
 
   // Border
   border: {
-    light: '#D8D4CD',
-    medium: '#C8C4BC',
-    dark: '#B8B4AC',
+    light: '#e2e8f0',
+    medium: '#cbd5e1',
+    dark: '#94a3b8',
   },
 
   // Status
-  error: '#A84040',
-  success: '#3D7A63',
-  warning: '#B88020',
-  info: '#C05518',
+  error: '#dc2626',
+  success: '#16a34a',
+  warning: '#d97706',
+  info: '#2563eb',
 
   // Gradients
   gradients: {
-    primary: ['#D96830', '#C05518'],
-    secondary: ['#A84040', '#883535'],
-    ai: ['#6B5CA0', '#554A85'],
-    success: ['#4A9B7F', '#3D7A63'],
+    primary: ['#f97316', '#ea580c'],
+    secondary: ['#3b82f6', '#2563eb'],
+    ai: ['#a78bfa', '#7c3aed'],
+    success: ['#4ade80', '#16a34a'],
+    dark: ['#0f172a', '#1e293b'],
   },
 } as const;
 
@@ -159,54 +161,55 @@ export const colors = {
 export const darkColors = {
   ...colors,
   background: {
-    primary: '#1A1A1A',
-    secondary: '#252525',
-    tertiary: '#303030',
+    primary: '#0f172a',
+    secondary: '#1e293b',
+    tertiary: '#334155',
   },
-  surface: '#252525',
-  surfaceVariant: '#303030',
+  surface: '#1e293b',
+  surfaceVariant: '#334155',
   text: {
-    primary: '#EBEBEB',
-    secondary: '#A0A0A0',
-    tertiary: '#707070',
-    inverse: '#252525',
+    primary: '#f1f5f9',
+    secondary: '#94a3b8',
+    tertiary: '#64748b',
+    inverse: '#0f172a',
   },
   border: {
-    light: '#3A3A3A',
-    medium: '#484848',
-    dark: '#585858',
+    light: '#334155',
+    medium: '#475569',
+    dark: '#64748b',
   },
   gray: {
-    50: '#1A1A1A',
-    100: '#252525',
-    200: '#303030',
-    300: '#404040',
-    400: '#707070',
-    500: '#A0A0A0',
-    600: '#B8B8B8',
-    700: '#D0D0D0',
-    800: '#EBEBEB',
-    900: '#F8F8F8',
+    50: '#0f172a',
+    100: '#1e293b',
+    200: '#334155',
+    300: '#475569',
+    400: '#64748b',
+    500: '#94a3b8',
+    600: '#cbd5e1',
+    700: '#e2e8f0',
+    800: '#f1f5f9',
+    900: '#f8fafc',
   },
-  white: '#EBEBEB',
-  black: '#1A1A1A',
+  white: '#f1f5f9',
+  black: '#0f172a',
   status: {
-    new: '#C45454',
-    newLight: '#2A2020',
-    learning: '#D96830',
-    learningLight: '#2A2218',
-    mastered: '#4A9B7F',
-    masteredLight: '#1A2A24',
+    new: '#f87171',
+    newLight: '#1e1b1b',
+    learning: '#f97316',
+    learningLight: '#1e1a15',
+    mastered: '#4ade80',
+    masteredLight: '#14231a',
   },
-  error: '#C45454',
-  success: '#4A9B7F',
-  warning: '#D4A030',
-  info: '#D96830',
+  error: '#f87171',
+  success: '#4ade80',
+  warning: '#fbbf24',
+  info: '#3b82f6',
   gradients: {
-    primary: ['#D96830', '#C05518'],
-    secondary: ['#C45454', '#A84040'],
-    ai: ['#8B7BBF', '#6B5CA0'],
-    success: ['#4A9B7F', '#3D7A63'],
+    primary: ['#f97316', '#ea580c'],
+    secondary: ['#3b82f6', '#2563eb'],
+    ai: ['#a78bfa', '#7c3aed'],
+    success: ['#4ade80', '#16a34a'],
+    dark: ['#0f172a', '#1e293b'],
   },
 } as const;
 
