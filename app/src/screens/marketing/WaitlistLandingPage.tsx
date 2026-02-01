@@ -225,11 +225,11 @@ export default function WaitlistLandingPage() {
           <View style={styles.createMethods}>
             {[
               { icon: 'document-text', label: 'PDF Slides' },
-              { icon: 'camera', label: 'Photos' },
-              { icon: 'chatbubbles', label: 'ChatGPT' },
+              { icon: 'sparkles', label: 'AI Generation' },
+              { icon: 'image', label: 'Image to Text' },
+              { icon: 'grid', label: 'Image Occlusion' },
               { icon: 'cloud-download', label: 'Anki Import' },
               { icon: 'create', label: 'Manual' },
-              { icon: 'mic', label: 'Voice Notes' },
             ].map((m, i) => (
               <View key={i} style={styles.createMethod}>
                 <Ionicons name={m.icon as any} size={20} color="#f97316" />
