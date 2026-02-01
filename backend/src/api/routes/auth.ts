@@ -139,17 +139,17 @@ router.post('/google', async (req: Request, res: Response) => {
 
           const userData = await accessTokenResponse.json() as GoogleUserData;
           googleUser = {
-            email: userData.email,
+            email: userData.email || '',
             name: userData.name || userData.email?.split('@')[0] || 'User',
-            googleId: userData.sub,
+            googleId: userData.sub || '',
             picture: userData.picture,
           };
         } else {
           const tokenData = await response.json() as GoogleUserData;
           googleUser = {
-            email: tokenData.email,
+            email: tokenData.email || '',
             name: tokenData.name || tokenData.email?.split('@')[0] || 'User',
-            googleId: tokenData.sub,
+            googleId: tokenData.sub || '',
             picture: tokenData.picture,
           };
         }
