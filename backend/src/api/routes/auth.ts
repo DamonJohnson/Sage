@@ -8,6 +8,14 @@ import { generateToken, requireAuth } from '../../middleware/auth.js';
 
 const router = Router();
 
+// Type for Google OAuth user data response
+interface GoogleUserData {
+  email?: string;
+  name?: string;
+  sub?: string;
+  picture?: string;
+}
+
 // Helper to convert SQLite datetime to ISO 8601 format
 const toISODate = (sqliteDate: string | null): string => {
   if (!sqliteDate) return new Date().toISOString();
@@ -129,7 +137,7 @@ router.post('/google', async (req: Request, res: Response) => {
             });
           }
 
-          const userData = await accessTokenResponse.json();
+          const userData = await accessTokenResponse.json() as GoogleUserData;
           googleUser = {
             email: userData.email,
             name: userData.name || userData.email?.split('@')[0] || 'User',
@@ -137,7 +145,7 @@ router.post('/google', async (req: Request, res: Response) => {
             picture: userData.picture,
           };
         } else {
-          const tokenData = await response.json();
+          const tokenData = await response.json() as GoogleUserData;
           googleUser = {
             email: tokenData.email,
             name: tokenData.name || tokenData.email?.split('@')[0] || 'User',
