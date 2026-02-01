@@ -20,11 +20,40 @@ import { spacing, typography, borderRadius } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Simplified FAQ
+// FAQ - designed to showcase features and handle objections
 const FAQ_DATA = [
-  { q: 'Works with Anki?', a: 'Yes. One-click import, keeps your scheduling data.' },
-  { q: 'What if AI gets it wrong?', a: 'Edit any card anytime. You are in control.' },
-  { q: 'Is my data private?', a: 'Encrypted, never shared, never used for training.' },
+  {
+    q: "What's included in the $99 lifetime deal?",
+    a: "Everything. Unlimited decks, unlimited cards, all creation modes (PDF, AI, Image Occlusion), full Anki import, spaced repetition algorithm, and every future feature we build. One payment, yours forever."
+  },
+  {
+    q: "How is this different from Anki?",
+    a: "Anki is powerful but complex. Sage gives you the same proven spaced repetition algorithm with AI card generation, modern UI, and zero setup time. Upload a PDF and you're studying in 30 seconds, not 30 minutes."
+  },
+  {
+    q: "Can I import my existing Anki decks?",
+    a: "Yes. One-click .apkg import. Your cards, scheduling data, and tags all transfer. Nothing is lost. You can keep using both if you want."
+  },
+  {
+    q: "How does Image Occlusion work for anatomy?",
+    a: "Upload any image, draw boxes over structures you want to memorise, and Sage generates flashcards automatically. Perfect for anatomy diagrams, histology slides, and radiology images. The proven method used by top medical students."
+  },
+  {
+    q: "What if the AI generates wrong cards?",
+    a: "Edit any card instantly. The AI gets you 90% there in seconds. You refine the rest. Still faster than making everything from scratch."
+  },
+  {
+    q: "Why is it only $99 right now?",
+    a: "We're building our founding user base. The 500 founding members get lifetime access at 50% off. After that, it's $199 for lifetime or $15/month. This price won't come back."
+  },
+  {
+    q: "What if it's not for me?",
+    a: "30-day money-back guarantee. No questions asked. Try it risk-free."
+  },
+  {
+    q: "Is my data private?",
+    a: "Your cards and study data are encrypted and never shared. We don't use your content to train AI. Your study materials stay yours."
+  },
 ];
 
 // Waitlist Form Component
