@@ -7,6 +7,7 @@ import aiRouter from './routes/ai.js';
 import publicRouter from './routes/public.js';
 import socialRouter from './routes/social.js';
 import importRouter from './routes/import.js';
+import waitlistRouter from './routes/waitlist.js';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/ai', aiRouter);
 router.use('/public', publicRouter);
 router.use('/social', socialRouter);
 router.use('/import', importRouter);
+router.use('/waitlist', waitlistRouter);
 
 export default router;

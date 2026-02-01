@@ -53,7 +53,46 @@ const FAQ_DATA = [
 function WaitlistForm({ colors, accent, variant = 'default' }: { colors: any; accent: any; variant?: 'default' | 'hero' | 'final' }) {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { isDesktop } = useResponsive();
+
+  const handleSubmit = async () => {
+    if (!email.includes('@')) {
+      setError('Please enter a valid email');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/waitlist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+          source: 'landing_page',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSubmitted(true);
+      } else {
+        setError(data.error || 'Something went wrong. Please try again.');
+      }
+    } catch (err) {
+      console.error('Waitlist signup error:', err);
+      setError('Unable to connect. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (submitted) {
     return (
@@ -77,19 +116,33 @@ function WaitlistForm({ colors, accent, variant = 'default' }: { colors: any; ac
           placeholder="Enter your email"
           placeholderTextColor={variant === 'final' ? 'rgba(255,255,255,0.5)' : colors.textSecondary}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(text) => {
+            setEmail(text);
+            setError(null);
+          }}
           keyboardType="email-address"
           autoCapitalize="none"
+          editable={!isLoading}
         />
         <TouchableOpacity
-          style={[styles.submitBtn, { backgroundColor: variant === 'final' ? '#fff' : accent.orange }]}
-          onPress={() => email.includes('@') && setSubmitted(true)}
+          style={[styles.submitBtn, { backgroundColor: variant === 'final' ? '#fff' : accent.orange, opacity: isLoading ? 0.7 : 1 }]}
+          onPress={handleSubmit}
           activeOpacity={0.9}
+          disabled={isLoading}
         >
-          <Text style={[styles.submitBtnText, { color: variant === 'final' ? accent.orange : '#fff' }]}>Claim Your Founding Spot</Text>
-          <Ionicons name="arrow-forward" size={16} color={variant === 'final' ? accent.orange : '#fff'} />
+          {isLoading ? (
+            <Text style={[styles.submitBtnText, { color: variant === 'final' ? accent.orange : '#fff' }]}>Joining...</Text>
+          ) : (
+            <>
+              <Text style={[styles.submitBtnText, { color: variant === 'final' ? accent.orange : '#fff' }]}>Claim Your Founding Spot</Text>
+              <Ionicons name="arrow-forward" size={16} color={variant === 'final' ? accent.orange : '#fff'} />
+            </>
+          )}
         </TouchableOpacity>
       </View>
+      {error && (
+        <Text style={[styles.errorText, { color: variant === 'final' ? '#ffcccc' : '#ff6b6b' }]}>{error}</Text>
+      )}
     </View>
   );
 }
@@ -566,6 +619,7 @@ const styles = StyleSheet.create({
   successBox: { alignItems: 'center', padding: spacing[6], borderRadius: borderRadius.xl },
   successTitle: { fontSize: typography.sizes.xl, fontWeight: '700', marginTop: spacing[3] },
   successText: { fontSize: typography.sizes.base, marginTop: spacing[1] },
+  errorText: { fontSize: typography.sizes.sm, marginTop: spacing[2], textAlign: 'center' },
 
   // Compare
   compareTable: { borderWidth: 1, borderRadius: borderRadius.xl, overflow: 'hidden', maxWidth: 450, alignSelf: 'center', width: '100%', marginBottom: spacing[8] },
