@@ -95,10 +95,13 @@ function WaitlistForm({ colors, accent, variant = 'default' }: { colors: any; ac
   };
 
   if (submitted) {
+    const checkColor = variant === 'final' ? '#fff' : accent.green;
     return (
       <View style={[styles.successBox, variant === 'final' && { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-        <Ionicons name="checkmark-circle" size={40} color={variant === 'final' ? '#fff' : accent.green} />
-        <Text style={[styles.successTitle, { color: variant === 'final' ? '#fff' : colors.textPrimary }]}>You are in!</Text>
+        <View style={[styles.checkCircle, { backgroundColor: checkColor }]}>
+          <Text style={styles.checkMark}>✓</Text>
+        </View>
+        <Text style={[styles.successTitle, { color: variant === 'final' ? '#fff' : colors.textPrimary }]}>You're in!</Text>
         <Text style={[styles.successText, { color: variant === 'final' ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]}>Check your inbox for confirmation.</Text>
       </View>
     );
@@ -619,6 +622,8 @@ const styles = StyleSheet.create({
   successBox: { alignItems: 'center', padding: spacing[6], borderRadius: borderRadius.xl },
   successTitle: { fontSize: typography.sizes.xl, fontWeight: '700', marginTop: spacing[3] },
   successText: { fontSize: typography.sizes.base, marginTop: spacing[1] },
+  checkCircle: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  checkMark: { color: '#fff', fontSize: 28, fontWeight: '700', marginTop: -2 },
   errorText: { fontSize: typography.sizes.sm, marginTop: spacing[2], textAlign: 'center' },
 
   // Compare
