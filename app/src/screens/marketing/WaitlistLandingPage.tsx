@@ -218,27 +218,6 @@ export default function WaitlistLandingPage() {
           </Text>
         </Animated.View>
 
-        {/* HOW IT WORKS */}
-        <View style={[styles.section, { maxWidth: containerMaxWidth }]}>
-          <Text style={styles.sectionTitle}>How It Works</Text>
-
-          <View style={[styles.featuresGrid, (isDesktop || isTablet) && styles.featuresGridRow]}>
-            {[
-              { icon: 'document-text-outline', title: 'Upload', desc: 'Drop your lecture slides or notes' },
-              { icon: 'sparkles-outline', title: 'Generate', desc: 'AI creates cards in seconds' },
-              { icon: 'school-outline', title: 'Study', desc: 'Learn with spaced repetition' },
-            ].map((f, i) => (
-              <View key={i} style={styles.featureCard}>
-                <View style={styles.featureIconWrap}>
-                  <Ionicons name={f.icon as any} size={24} color="#f97316" />
-                </View>
-                <Text style={styles.featureTitle}>{f.title}</Text>
-                <Text style={styles.featureDesc}>{f.desc}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
         {/* CREATE FROM ANYTHING */}
         <View style={[styles.section, { maxWidth: containerMaxWidth }]}>
           <Text style={styles.sectionTitle}>Create Cards From Anything</Text>
@@ -264,29 +243,6 @@ export default function WaitlistLandingPage() {
             <Text style={styles.aiFeatureText}>
               <Text style={{ fontWeight: '700', color: '#4ade80' }}>AI Study Assistant</Text> — Generate new cards on the fly while studying. Just ask.
             </Text>
-          </View>
-        </View>
-
-        {/* SOCIAL PROOF */}
-        <View style={[styles.section, { maxWidth: containerMaxWidth }]}>
-          <View style={styles.testimonial}>
-            <Text style={styles.quote}>
-              "I was spending 2-3 hours after every lecture making cards. Now I upload the slides and I'm studying within a minute."
-            </Text>
-            <Text style={styles.quoteAuthor}>— Medical student, University of Queensland</Text>
-          </View>
-
-          <View style={[styles.statsRow, !isDesktop && styles.statsRowMobile]}>
-            {[
-              { num: '12,000+', label: 'Cards generated' },
-              { num: '4+ hrs', label: 'Saved per week' },
-              { num: '15+', label: 'Universities' },
-            ].map((s, i) => (
-              <View key={i} style={styles.statItem}>
-                <Text style={styles.statNum}>{s.num}</Text>
-                <Text style={styles.statLabel}>{s.label}</Text>
-              </View>
-            ))}
           </View>
         </View>
 
