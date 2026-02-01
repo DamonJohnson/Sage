@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, Platform } from 'react-native';
 import { useAuthStore } from '@/store';
 
 export type ThemeMode = 'dark' | 'light';
 export type ThemeSetting = 'dark' | 'light' | 'system';
+
+// Local storage key for theme (web fallback for faster hydration)
+const THEME_STORAGE_KEY = 'sage-theme-preference';
 
 interface ThemeContextType {
   mode: ThemeMode;
@@ -11,16 +14,56 @@ interface ThemeContextType {
   themeSetting: ThemeSetting;
   toggleTheme: () => void;
   setTheme: (setting: ThemeSetting) => void;
+  isHydrated: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+// Get initial theme from localStorage (web) for instant load
+const getInitialTheme = (): ThemeSetting => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY);
+      if (stored === 'light' || stored === 'dark' || stored === 'system') {
+        return stored;
+      }
+    } catch (e) {
+      // localStorage not available
+    }
+  }
+  return 'dark'; // Default for first-time users
+};
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemColorScheme = useColorScheme();
   const { settings, updateSettings } = useAuthStore();
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [localTheme, setLocalTheme] = useState<ThemeSetting>(getInitialTheme);
 
-  // Get the theme setting from auth store, default to 'dark'
-  const themeSetting: ThemeSetting = (settings?.theme as ThemeSetting) || 'dark';
+  // Sync with auth store once hydrated
+  useEffect(() => {
+    // Check if zustand store is hydrated
+    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+      setIsHydrated(true);
+    });
+
+    // If already hydrated
+    if (useAuthStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    }
+
+    return unsubscribe;
+  }, []);
+
+  // Once hydrated, use the persisted settings
+  useEffect(() => {
+    if (isHydrated && settings?.theme) {
+      setLocalTheme(settings.theme as ThemeSetting);
+    }
+  }, [isHydrated, settings?.theme]);
+
+  // Get the theme setting - use local state for instant response
+  const themeSetting: ThemeSetting = localTheme;
 
   // Calculate actual mode based on setting
   const getActualMode = (): ThemeMode => {
@@ -34,19 +77,40 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const isDark = mode === 'dark';
 
   const toggleTheme = () => {
-    // Toggle cycles: current -> opposite
-    // If system, toggle to opposite of current actual mode
-    // Otherwise toggle between light and dark
     const newSetting: ThemeSetting = isDark ? 'light' : 'dark';
+
+    // Update local state immediately for instant feedback
+    setLocalTheme(newSetting);
+
+    // Persist to localStorage (web) for faster hydration next time
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, newSetting);
+      } catch (e) {
+        // localStorage not available
+      }
+    }
+
+    // Update zustand store (persists to AsyncStorage)
     updateSettings({ theme: newSetting });
   };
 
   const setTheme = (setting: ThemeSetting) => {
+    setLocalTheme(setting);
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, setting);
+      } catch (e) {
+        // localStorage not available
+      }
+    }
+
     updateSettings({ theme: setting });
   };
 
   return (
-    <ThemeContext.Provider value={{ mode, isDark, themeSetting, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ mode, isDark, themeSetting, toggleTheme, setTheme, isHydrated }}>
       {children}
     </ThemeContext.Provider>
   );

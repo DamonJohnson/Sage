@@ -305,6 +305,38 @@ export async function generateFromConcept(
   });
 }
 
+// ============================================
+// Image Occlusion AI Features
+// ============================================
+
+export interface ExtractOcclusionLabelParams {
+  imageBase64: string;
+  occlusionRegion: {
+    x: number; // Percentage (0-100)
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
+export interface ExtractOcclusionLabelResponse {
+  label: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+/**
+ * Extract a label from an occluded region using AI vision
+ * Used to auto-populate occlusion labels when drawing
+ */
+export async function extractOcclusionLabel(
+  params: ExtractOcclusionLabelParams
+): Promise<APIResponse<ExtractOcclusionLabelResponse>> {
+  return apiRequest<ExtractOcclusionLabelResponse>('POST', '/api/ai/extract-occlusion-label', {
+    imageBase64: params.imageBase64,
+    occlusionRegion: params.occlusionRegion,
+  });
+}
+
 // Fallback mock generation when API is unavailable
 export function generateMockCards(
   topic: string,

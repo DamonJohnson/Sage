@@ -13,6 +13,7 @@ export type RootStackParamList = {
   CreateAI: { deckId?: string } | undefined;
   CreatePDF: { deckId?: string } | undefined;
   CreateImage: undefined;
+  CreateOcclusion: { deckId?: string } | undefined;
   CreateImport: { mode?: 'anki' | 'text' } | undefined;
   AddCardsPreview: {
     deckId: string | null;

@@ -1,5 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity, Dimensions, Platform, Image, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, Dimensions, Platform, Image, Modal, ViewStyle, LayoutChangeEvent } from 'react-native';
+
+// Image bounds within container (accounting for resizeMode: contain)
+interface ImageBounds {
+  offsetX: number;
+  offsetY: number;
+  renderedWidth: number;
+  renderedHeight: number;
+}
+
+// Calculate actual rendered image bounds within a container using resizeMode: contain
+function calculateImageBounds(
+  containerWidth: number,
+  containerHeight: number,
+  imageWidth: number,
+  imageHeight: number
+): ImageBounds {
+  if (!containerWidth || !containerHeight || !imageWidth || !imageHeight) {
+    return { offsetX: 0, offsetY: 0, renderedWidth: containerWidth, renderedHeight: containerHeight };
+  }
+
+  const containerAspect = containerWidth / containerHeight;
+  const imageAspect = imageWidth / imageHeight;
+
+  let renderedWidth: number;
+  let renderedHeight: number;
+  let offsetX: number;
+  let offsetY: number;
+
+  if (imageAspect > containerAspect) {
+    // Image is wider than container - letterbox top/bottom
+    renderedWidth = containerWidth;
+    renderedHeight = containerWidth / imageAspect;
+    offsetX = 0;
+    offsetY = (containerHeight - renderedHeight) / 2;
+  } else {
+    // Image is taller than container - letterbox left/right
+    renderedHeight = containerHeight;
+    renderedWidth = containerHeight * imageAspect;
+    offsetX = (containerWidth - renderedWidth) / 2;
+    offsetY = 0;
+  }
+
+  return { offsetX, offsetY, renderedWidth, renderedHeight };
+}
 
 // Reusable hover hook for web
 function useHoverState() {
@@ -46,6 +90,7 @@ interface StudyCardProps {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = Math.min(SCREEN_WIDTH - spacing[8], 500);
 const CARD_HEIGHT = CARD_WIDTH * 0.7;
+const OCCLUSION_CARD_HEIGHT = CARD_WIDTH * 0.85; // Taller for image occlusion cards
 
 // Multiple choice option button with hover
 function McOptionButton({
@@ -183,14 +228,58 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [occlusionContainerSize, setOcclusionContainerSize] = useState({ width: CARD_WIDTH - spacing[12], height: OCCLUSION_CARD_HEIGHT - spacing[16] });
+  const [occlusionImageDimensions, setOcclusionImageDimensions] = useState({ width: 0, height: 0 });
+  const [occlusionImageBounds, setOcclusionImageBounds] = useState<ImageBounds>({ offsetX: 0, offsetY: 0, renderedWidth: 0, renderedHeight: 0 });
+  const [zoomLevel, setZoomLevel] = useState(1); // 1 = 100%, 1.5 = 150%, etc.
+
+  // Load occlusion image dimensions when card changes
+  useEffect(() => {
+    if (card.cardType === 'image_occlusion' && card.imageOcclusion?.sourceImage) {
+      if (Platform.OS === 'web') {
+        const img = new window.Image();
+        img.onload = () => {
+          setOcclusionImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+        img.src = card.imageOcclusion.sourceImage;
+      } else {
+        // On native, use Image.getSize
+        Image.getSize(
+          card.imageOcclusion.sourceImage,
+          (width, height) => {
+            setOcclusionImageDimensions({ width, height });
+          },
+          () => {
+            // Error getting dimensions - use container as fallback
+            setOcclusionImageDimensions({ width: occlusionContainerSize.width, height: occlusionContainerSize.height });
+          }
+        );
+      }
+    }
+  }, [card.id, card.imageOcclusion?.sourceImage]);
+
+  // Update image bounds when container or image dimensions change
+  useEffect(() => {
+    if (occlusionContainerSize.width && occlusionContainerSize.height && occlusionImageDimensions.width && occlusionImageDimensions.height) {
+      const bounds = calculateImageBounds(
+        occlusionContainerSize.width,
+        occlusionContainerSize.height,
+        occlusionImageDimensions.width,
+        occlusionImageDimensions.height
+      );
+      setOcclusionImageBounds(bounds);
+    }
+  }, [occlusionContainerSize, occlusionImageDimensions]);
 
   const isMultipleChoice = card.cardType === 'multiple_choice' && card.options;
   const isCloze = card.cardType === 'cloze';
+  const isImageOcclusion = card.cardType === 'image_occlusion' && card.imageOcclusion;
 
   // Reset state when card changes
   useEffect(() => {
     setSelectedOption(null);
     setHasSubmitted(false);
+    setZoomLevel(1); // Reset zoom when changing cards
   }, [card.id]);
 
   useEffect(() => {
@@ -386,6 +475,189 @@ export function StudyCard({ card, isFlipped, onFlip, onAnswerSubmit, showResult,
       </Text>
     );
   };
+
+  // Render occlusion overlay for image occlusion cards
+  // Uses image bounds to correctly position occlusions over the actual rendered image
+  const renderOcclusionOverlay = useCallback((showRevealed: boolean) => {
+    if (!card.imageOcclusion) return null;
+
+    const { allOcclusions, revealedOcclusionId, revealedOcclusionIds, revealMode } = card.imageOcclusion;
+    const occlusionsToUse = allOcclusions || [];
+
+    // Determine which occlusions should be revealed based on reveal mode
+    const isOcclusionRevealed = (occId: string): boolean => {
+      if (!showRevealed) return false;
+
+      // Support both legacy single ID and new array
+      if (revealMode === 'all_at_once') {
+        return true; // In all_at_once mode, reveal all when showing answer
+      }
+
+      // One at a time mode (default) - check both legacy and new fields
+      if (revealedOcclusionIds && revealedOcclusionIds.length > 0) {
+        return revealedOcclusionIds.includes(occId);
+      }
+      return occId === revealedOcclusionId;
+    };
+
+    return (
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {occlusionsToUse.map((occ, index) => {
+          const isRevealed = isOcclusionRevealed(occ.id);
+
+          if (isRevealed) return null;
+
+          // Convert percentages to actual pixel values using image bounds
+          // This accounts for letterboxing when using resizeMode: contain
+          const occStyle: ViewStyle = {
+            position: 'absolute',
+            left: occlusionImageBounds.offsetX + (occ.x / 100) * occlusionImageBounds.renderedWidth,
+            top: occlusionImageBounds.offsetY + (occ.y / 100) * occlusionImageBounds.renderedHeight,
+            width: (occ.width / 100) * occlusionImageBounds.renderedWidth,
+            height: (occ.height / 100) * occlusionImageBounds.renderedHeight,
+            backgroundColor: occ.color,
+            borderRadius: occ.type === 'ellipse' ? 1000 : borderRadius.sm,
+            justifyContent: 'center',
+            alignItems: 'center',
+          };
+
+          // Show number badge on occlusions being tested (one at a time mode)
+          const showNumber = !showRevealed && revealMode !== 'all_at_once' && occ.id === revealedOcclusionId;
+
+          return (
+            <View key={occ.id} style={occStyle}>
+              {showNumber && (
+                <Text style={styles.occlusionNumberBadge}>?</Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  }, [card.imageOcclusion, occlusionImageBounds]);
+
+  // For image occlusion cards
+  if (isImageOcclusion && card.imageOcclusion) {
+    const allOcclusions = card.imageOcclusion.allOcclusions || [];
+    const revealedOcclusion = allOcclusions.find(
+      (o) => o.id === card.imageOcclusion!.revealedOcclusionId
+    );
+    const label = revealedOcclusion?.label || card.back;
+    const isAllAtOnce = card.imageOcclusion.revealMode === 'all_at_once';
+
+    const handleOcclusionLayout = (event: LayoutChangeEvent) => {
+      const { width, height } = event.nativeEvent.layout;
+      setOcclusionContainerSize({ width, height });
+    };
+
+    // Determine prompt text based on reveal mode
+    const getPromptText = (): string => {
+      if (isAllAtOnce) {
+        return `Identify all ${allOcclusions.length} hidden areas`;
+      }
+      return 'What\'s hidden?';
+    };
+
+    // Zoom controls for image occlusion cards
+    const renderZoomControls = () => (
+      <View style={styles.zoomControls}>
+        <TouchableOpacity
+          style={[styles.zoomButton, { backgroundColor: surfaceHover }]}
+          onPress={() => setZoomLevel(Math.max(0.5, zoomLevel - 0.25))}
+          disabled={zoomLevel <= 0.5}
+        >
+          <Ionicons name="remove" size={16} color={zoomLevel <= 0.5 ? textSecondary : textPrimary} />
+        </TouchableOpacity>
+        <Text style={[styles.zoomText, { color: textSecondary }]}>{Math.round(zoomLevel * 100)}%</Text>
+        <TouchableOpacity
+          style={[styles.zoomButton, { backgroundColor: surfaceHover }]}
+          onPress={() => setZoomLevel(Math.min(2, zoomLevel + 0.25))}
+          disabled={zoomLevel >= 2}
+        >
+          <Ionicons name="add" size={16} color={zoomLevel >= 2 ? textSecondary : textPrimary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.zoomButton, { backgroundColor: surfaceHover, marginLeft: spacing[1] }]}
+          onPress={() => card.imageOcclusion?.sourceImage && handleImagePress(card.imageOcclusion.sourceImage)}
+        >
+          <Ionicons name="expand-outline" size={14} color={textPrimary} />
+        </TouchableOpacity>
+      </View>
+    );
+
+    return (
+      <Pressable onPress={handlePress} style={styles.occlusionContainer}>
+        {/* Front of card (all occluded) */}
+        <Animated.View
+          style={[
+            styles.occlusionCard,
+            styles.cardFront,
+            { backgroundColor: surface, borderColor: border },
+            frontAnimatedStyle,
+          ]}
+        >
+          <View style={styles.occlusionCardHeader}>
+            <View style={[styles.cardLabel, { backgroundColor: accent.purple + '20' }]}>
+              <Text style={[styles.cardLabelText, { color: accent.purple }]}>
+                {isAllAtOnce ? `Image Occlusion (${allOcclusions.length})` : 'Image Occlusion'}
+              </Text>
+            </View>
+            {renderZoomControls()}
+          </View>
+          <View
+            style={[styles.occlusionImageContainer, { transform: [{ scale: zoomLevel }] }]}
+            onLayout={handleOcclusionLayout}
+          >
+            <Image
+              source={{ uri: card.imageOcclusion.sourceImage }}
+              style={styles.occlusionImage}
+              resizeMode="contain"
+            />
+            {renderOcclusionOverlay(false)}
+          </View>
+          {renderImageZoomModal()}
+          <View style={styles.flipHint}>
+            <Ionicons name="eye-outline" size={16} color={textSecondary} />
+            <Text style={[styles.flipHintText, { color: textSecondary }]}>{getPromptText()}</Text>
+          </View>
+        </Animated.View>
+
+        {/* Back of card (revealed) */}
+        <Animated.View
+          style={[
+            styles.occlusionCard,
+            styles.cardBack,
+            { backgroundColor: accent.green + '15', borderColor: accent.green + '40' },
+            backAnimatedStyle,
+          ]}
+        >
+          <View style={styles.occlusionCardHeader}>
+            <View style={[styles.cardLabel, { backgroundColor: accent.green + '20' }]}>
+              <Text style={[styles.cardLabelText, { color: accent.green }]}>Revealed</Text>
+            </View>
+            {renderZoomControls()}
+          </View>
+          <View
+            style={[styles.occlusionImageContainer, { transform: [{ scale: zoomLevel }] }]}
+            onLayout={handleOcclusionLayout}
+          >
+            <Image
+              source={{ uri: card.imageOcclusion.sourceImage }}
+              style={styles.occlusionImage}
+              resizeMode="contain"
+            />
+            {renderOcclusionOverlay(true)}
+          </View>
+          {label && !isAllAtOnce && (
+            <View style={[styles.occlusionLabel, { backgroundColor: surfaceHover }]}>
+              <Ionicons name="text-outline" size={14} color={textSecondary} />
+              <Text style={[styles.occlusionLabelText, { color: textPrimary }]}>{label}</Text>
+            </View>
+          )}
+        </Animated.View>
+      </Pressable>
+    );
+  }
 
   // For cloze deletion cards, render fill-in-the-blank UI
   if (isCloze) {
@@ -827,6 +1099,93 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: borderRadius.full,
     padding: spacing[1],
+  },
+  // Image occlusion styles
+  occlusionContainer: {
+    width: CARD_WIDTH,
+    height: OCCLUSION_CARD_HEIGHT,
+    alignSelf: 'center',
+    ...Platform.select({
+      web: {
+        perspective: '1200px',
+        transformStyle: 'preserve-3d',
+      },
+    }),
+  },
+  occlusionCard: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    ...Platform.select({
+      web: {
+        backfaceVisibility: 'hidden',
+        WebkitBackfaceVisibility: 'hidden',
+        transformStyle: 'preserve-3d',
+      } as any,
+      default: {
+        backfaceVisibility: 'hidden',
+      },
+    }),
+  },
+  occlusionCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[2],
+  },
+  occlusionImageContainer: {
+    flex: 1,
+    width: '100%',
+    position: 'relative',
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  occlusionImage: {
+    width: '100%',
+    height: '100%',
+  },
+  occlusionLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.full,
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  occlusionLabelText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  occlusionNumberBadge: {
+    color: '#FFFFFF',
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.fontWeight.bold,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  zoomControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  zoomButton: {
+    width: 28,
+    height: 28,
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zoomText: {
+    fontSize: typography.sizes.xs,
+    minWidth: 36,
+    textAlign: 'center',
   },
   // Cloze deletion styles
   clozeText: {

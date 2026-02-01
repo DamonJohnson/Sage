@@ -10,6 +10,7 @@ import { CreateManualScreen } from '@/screens/create/CreateManualScreen';
 import { CreateAIScreen } from '@/screens/create/CreateAIScreen';
 import { CreatePDFScreen } from '@/screens/create/CreatePDFScreen';
 import { CreateImageScreen } from '@/screens/create/CreateImageScreen';
+import { CreateOcclusionScreen } from '@/screens/create/CreateOcclusionScreen';
 import { CreateImportScreen } from '@/screens/create/CreateImportScreen';
 import { AddCardsPreviewScreen } from '@/screens/create/AddCardsPreviewScreen';
 import { SettingsScreen } from '@/screens/settings/SettingsScreen';
@@ -76,6 +77,12 @@ const linking: LinkingOptions<RootStackParamList> = {
         },
       },
       CreateImage: 'create/image',
+      CreateOcclusion: {
+        path: 'create/occlusion',
+        parse: {
+          deckId: (deckId: string) => deckId,
+        },
+      },
       CreateImport: {
         path: 'create/import',
         parse: {
@@ -140,6 +147,7 @@ function MainNavigator() {
       <Stack.Screen name="CreateAI" component={CreateAIScreen} />
       <Stack.Screen name="CreatePDF" component={CreatePDFScreen} />
       <Stack.Screen name="CreateImage" component={CreateImageScreen} />
+      <Stack.Screen name="CreateOcclusion" component={CreateOcclusionScreen} />
       <Stack.Screen name="CreateImport" component={CreateImportScreen} />
       <Stack.Screen name="AddCardsPreview" component={AddCardsPreviewScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />

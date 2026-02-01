@@ -1,6 +1,5 @@
 [build]
 builder = "nixpacks"
-nixpacksVersion = "1.38.0"
 
 [build.nixpacksPlan.phases.setup]
 nixPkgs = ["nodejs_20", "npm-9_x"]
@@ -9,3 +8,4 @@ nixPkgs = ["nodejs_20", "npm-9_x"]
 startCommand = "npm start"
 healthcheckPath = "/api/health"
 restartPolicyType = "on_failure"
+numReplicas = 1

@@ -71,6 +71,14 @@ export function CreateHubScreen() {
       route: 'CreateImage',
     },
     {
+      id: 'occlusion',
+      title: 'Image Occlusion',
+      description: 'Hide parts of images for anatomy, maps, diagrams',
+      icon: 'eye-off-outline',
+      gradient: ['#DB2777', '#BE185D'] as const,
+      route: 'CreateOcclusion',
+    },
+    {
       id: 'import-anki',
       title: 'Import from Anki',
       description: 'Import decks from Anki (.apkg files)',

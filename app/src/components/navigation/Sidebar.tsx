@@ -211,10 +211,14 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
     <View style={[styles.container, { backgroundColor: background, borderRightColor: border }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: border }]}>
-        <View style={styles.headerLeft}>
+        <TouchableOpacity
+          style={styles.headerLeft}
+          onPress={() => onNavigate('Dashboard')}
+          activeOpacity={0.7}
+        >
           <RadiatingLogo accentColor={accent.orange} size="small" />
           <Text style={[styles.logoText, { color: textPrimary }]}>Sage</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* Theme Toggle */}
         <TouchableOpacity

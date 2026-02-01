@@ -1,152 +1,157 @@
-// Sage Design System - Notion-inspired Color Palette
+// Sage Design System
 // Grayscale-first with accent colors used sparingly
-// Primary accent: Orange #F47A3A from logo
+// Primary accent: Burnt Orange #D96830 (dark) / #C05518 (light)
 
-// Dark Mode Colors (default)
+// Dark Mode Colors (default for first-time users)
 export const darkTheme = {
-  // Core surfaces
-  background: '#191919',
-  surface: '#2F2F2F',
-  surfaceHover: '#3A3A3A',
+  // Core surfaces - warm charcoal
+  background: '#1A1A1A',
+  surface: '#252525',
+  surfaceHover: '#303030',
   border: '#3A3A3A',
 
   // Text
   text: {
-    primary: '#E3E2E0',
-    secondary: '#9B9A97',
+    primary: '#EBEBEB',
+    secondary: '#A0A0A0',
   },
 
   // Accent colors (use sparingly)
   accent: {
-    orange: '#F47A3A',    // Primary - links, primary actions, brand
-    green: '#46B882',     // Success, mastered
-    red: '#FF6B6B',       // Urgent/important, new cards
-    purple: '#9B8AFB',    // Multiple choice, AI features
+    orange: '#D96830',    // Primary - warm burnt orange, slightly brighter
+    green: '#4A9B7F',     // Success, mastered - sage green
+    red: '#C45454',       // Urgent/important - muted red
+    purple: '#8B7BBF',    // Multiple choice, AI features
   },
 } as const;
 
-// Light Mode Colors - Warm, refined palette complementing the orange brand
+// Light Mode Colors - Sophisticated warm neutral palette
+// Design principles:
+// - Warm paper-like background reduces eye strain
+// - White cards for seamless image backgrounds
+// - Muted accent colors that don't compete with content
+// - Strong text contrast for readability
 export const lightTheme = {
-  // Core surfaces - soft warm tones instead of stark white
-  background: '#FDFCFA',      // Subtle warm cream, easier on the eyes
-  surface: '#F5F3EF',         // Warm light surface with slight warmth
-  surfaceHover: '#EDEAE4',    // Noticeably warmer hover state
-  border: '#E2DFD8',          // Soft warm border, not harsh gray
+  // Core surfaces
+  background: '#F0EDE8',      // Warm paper - like aged quality paper
+  surface: '#FFFFFF',         // Pure white cards for image compatibility
+  surfaceHover: '#F7F5F2',    // Subtle warm hover
+  border: '#D8D4CD',          // Warm grey border
 
-  // Text - richer, warmer tones for better readability
+  // Text - high contrast for readability
   text: {
-    primary: '#2C2A25',       // Rich warm black, softer than pure black
-    secondary: '#6E6B63',     // Warm medium gray with personality
+    primary: '#1F1E1C',       // Near black with warmth
+    secondary: '#6B665D',     // Warm medium grey
   },
 
-  // Accent colors (optimized for light backgrounds)
+  // Accent colors (deeper for light backgrounds)
   accent: {
-    orange: '#E86D30',        // Slightly deeper orange for better contrast on light bg
-    green: '#3EA876',         // Richer green, better contrast
-    red: '#E55B5B',           // Deeper red for better visibility
-    purple: '#7C6BF0',        // Deeper purple for light mode contrast
+    orange: '#C05518',        // Burnt orange - good contrast on light bg
+    green: '#3D7A63',         // Deep sage green
+    red: '#A84040',           // Deep muted red
+    purple: '#6B5CA0',        // Deep muted purple
   },
 } as const;
 
 // Theme type for type safety
 export type Theme = typeof darkTheme;
 
-// Legacy color mapping for backwards compatibility during migration
+// Legacy color mapping for backwards compatibility
 export const colors = {
-  // Primary - Orange from Sage logo
+  // Primary - Burnt Orange scale
   primary: {
-    50: '#FEF3EE',
-    100: '#FDE7DD',
-    200: '#FBCFBB',
-    300: '#F9B799',
-    400: '#F79F77',
-    500: '#F47A3A',
-    600: '#E5652A',
-    700: '#C4511F',
-    800: '#A34118',
-    900: '#823212',
+    50: '#FEF6F0',
+    100: '#FCEBE0',
+    200: '#F8D5C0',
+    300: '#F0B898',
+    400: '#E89468',
+    500: '#D96830',
+    600: '#C05518',
+    700: '#9A4412',
+    800: '#74330E',
+    900: '#4E220A',
   },
 
-  // Secondary - keeping for gradients
+  // Secondary - warm coral
   secondary: {
-    50: '#fff5f3',
-    100: '#ffe4df',
-    200: '#ffc9bf',
-    300: '#ffa799',
-    400: '#ff8573',
-    500: '#ff7f66',
-    600: '#ff6b4d',
-    700: '#e85a3d',
-    800: '#c44a32',
-    900: '#a13d2a',
+    50: '#FDF5F2',
+    100: '#FAEBE5',
+    200: '#F2D5CC',
+    300: '#E8B8AA',
+    400: '#D89580',
+    500: '#C06B50',
+    600: '#A05540',
+    700: '#804435',
+    800: '#60332A',
+    900: '#40221F',
   },
 
   // Status colors for SRS states
   status: {
-    new: '#E55B5B',        // Red - new cards (deeper for light mode)
-    newLight: '#FDF0EF',   // Warm light red tint
-    learning: '#E86D30',   // Orange - learning/review (matches brand, deeper)
-    learningLight: '#FDF4EE', // Warm light orange tint
-    mastered: '#3EA876',   // Green - mastered (deeper)
-    masteredLight: '#EEF7F2', // Warm light green tint
+    new: '#A84040',        // Muted red - new cards
+    newLight: '#FDF0F0',   // Light red tint
+    learning: '#C05518',   // Burnt orange - learning
+    learningLight: '#FEF6F0',
+    mastered: '#3D7A63',   // Sage green - mastered
+    masteredLight: '#F0F7F4',
   },
 
-  // Grays (warm light mode values)
+  // Grays - warm neutral scale
   gray: {
-    50: '#FDFCFA',
-    100: '#F5F3EF',
-    200: '#EDEAE4',
-    300: '#E2DFD8',
-    400: '#9A9790',
-    500: '#6E6B63',
-    600: '#575550',
-    700: '#3D3B36',
-    800: '#2C2A25',
-    900: '#1A1917',
+    50: '#FAFAF8',
+    100: '#F0EDE8',
+    200: '#E5E1DA',
+    300: '#D8D4CD',
+    400: '#A8A49C',
+    500: '#6B665D',
+    600: '#52504A',
+    700: '#3A3836',
+    800: '#1F1E1C',
+    900: '#121110',
   },
 
-  // Semantic colors
-  white: '#FDFCFA',
-  black: '#1A1917',
+  // Semantic
+  white: '#FFFFFF',
+  black: '#121110',
 
-  // Background colors (warm light mode defaults)
+  // Background
   background: {
-    primary: '#FDFCFA',
-    secondary: '#F5F3EF',
-    tertiary: '#EDEAE4',
+    primary: '#F0EDE8',
+    secondary: '#FFFFFF',
+    tertiary: '#E5E1DA',
   },
 
-  // Surface colors (warm light mode)
-  surface: '#F5F3EF',
-  surfaceVariant: '#EDEAE4',
+  // Surface
+  surface: '#FFFFFF',
+  surfaceVariant: '#F7F5F2',
 
-  // Text colors (warm light mode)
+  // Text
   text: {
-    primary: '#2C2A25',
-    secondary: '#6E6B63',
-    tertiary: '#9A9790',
-    inverse: '#F5F3EF',
+    primary: '#1F1E1C',
+    secondary: '#6B665D',
+    tertiary: '#A8A49C',
+    inverse: '#FFFFFF',
   },
 
-  // Border colors (warm light mode)
+  // Border
   border: {
-    light: '#E2DFD8',
-    medium: '#D4D1C9',
-    dark: '#C6C3BB',
+    light: '#D8D4CD',
+    medium: '#C8C4BC',
+    dark: '#B8B4AC',
   },
 
-  // Semantic status (deeper for light mode contrast)
-  error: '#E55B5B',
-  success: '#3EA876',
-  warning: '#E69B1F',
-  info: '#E86D30',
+  // Status
+  error: '#A84040',
+  success: '#3D7A63',
+  warning: '#B88020',
+  info: '#C05518',
 
-  // Gradients (warm, refined for light mode)
+  // Gradients
   gradients: {
-    primary: ['#E86D30', '#D45A20'],
-    secondary: ['#E55B5B', '#D04A4A'],
-    ai: ['#7C6BF0', '#6358E0'],
-    success: ['#3EA876', '#329968'],
+    primary: ['#D96830', '#C05518'],
+    secondary: ['#A84040', '#883535'],
+    ai: ['#6B5CA0', '#554A85'],
+    success: ['#4A9B7F', '#3D7A63'],
   },
 } as const;
 
@@ -154,37 +159,55 @@ export const colors = {
 export const darkColors = {
   ...colors,
   background: {
-    primary: '#191919',
-    secondary: '#2F2F2F',
-    tertiary: '#3A3A3A',
+    primary: '#1A1A1A',
+    secondary: '#252525',
+    tertiary: '#303030',
   },
-  surface: '#2F2F2F',
-  surfaceVariant: '#3A3A3A',
+  surface: '#252525',
+  surfaceVariant: '#303030',
   text: {
-    primary: '#E3E2E0',
-    secondary: '#9B9A97',
-    tertiary: '#787774',
-    inverse: '#37352F',
+    primary: '#EBEBEB',
+    secondary: '#A0A0A0',
+    tertiary: '#707070',
+    inverse: '#252525',
   },
   border: {
     light: '#3A3A3A',
-    medium: '#4A4A4A',
-    dark: '#5A5A5A',
+    medium: '#484848',
+    dark: '#585858',
   },
   gray: {
-    50: '#191919',
-    100: '#2F2F2F',
-    200: '#3A3A3A',
-    300: '#4A4A4A',
-    400: '#787774',
-    500: '#9B9A97',
-    600: '#B3B2AF',
-    700: '#CBCAC7',
-    800: '#E3E2E0',
-    900: '#F7F6F3',
+    50: '#1A1A1A',
+    100: '#252525',
+    200: '#303030',
+    300: '#404040',
+    400: '#707070',
+    500: '#A0A0A0',
+    600: '#B8B8B8',
+    700: '#D0D0D0',
+    800: '#EBEBEB',
+    900: '#F8F8F8',
   },
-  white: '#E3E2E0',
-  black: '#191919',
+  white: '#EBEBEB',
+  black: '#1A1A1A',
+  status: {
+    new: '#C45454',
+    newLight: '#2A2020',
+    learning: '#D96830',
+    learningLight: '#2A2218',
+    mastered: '#4A9B7F',
+    masteredLight: '#1A2A24',
+  },
+  error: '#C45454',
+  success: '#4A9B7F',
+  warning: '#D4A030',
+  info: '#D96830',
+  gradients: {
+    primary: ['#D96830', '#C05518'],
+    secondary: ['#C45454', '#A84040'],
+    ai: ['#8B7BBF', '#6B5CA0'],
+    success: ['#4A9B7F', '#3D7A63'],
+  },
 } as const;
 
 export type Colors = typeof colors;

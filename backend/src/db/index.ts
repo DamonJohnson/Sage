@@ -242,6 +242,11 @@ export function initializeDatabase() {
     db.exec(`ALTER TABLE cards ADD COLUMN cloze_index INTEGER`);
   } catch (e) { /* Column already exists */ }
 
+  // Migration: Add image_occlusion column to cards (for image occlusion cards)
+  try {
+    db.exec(`ALTER TABLE cards ADD COLUMN image_occlusion TEXT`);
+  } catch (e) { /* Column already exists */ }
+
   // Seed demo users for social features (insert if they don't exist)
   const demoUsers = [
     { id: 'user-sarah', email: 'sarah@example.com', name: 'Sarah Chen', streak: 15, longest: 30, bio: 'Medical student, loves anatomy flashcards' },

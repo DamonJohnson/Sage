@@ -260,6 +260,7 @@ export const useDeckStore = create<DeckState>()(
           cardType: card.cardType,
           options: card.options,
           explanation: card.explanation,
+          imageOcclusion: card.imageOcclusion,
         }));
 
         const response = await addCardsAPI(deckId, cardsToAdd);

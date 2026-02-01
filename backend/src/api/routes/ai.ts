@@ -1620,6 +1620,127 @@ Return ONLY valid JSON in this exact format (no markdown, no extra text):
   }
 });
 
+// POST /api/ai/extract-occlusion-label - Extract label from an occluded region using vision
+router.post('/extract-occlusion-label', async (req: Request, res: Response) => {
+  try {
+    const { imageBase64, occlusionRegion } = req.body;
+
+    if (!imageBase64) {
+      res.status(400).json({
+        success: false,
+        error: 'Image is required',
+      });
+      return;
+    }
+
+    if (!occlusionRegion || typeof occlusionRegion.x !== 'number') {
+      res.status(400).json({
+        success: false,
+        error: 'Occlusion region is required (x, y, width, height as percentages)',
+      });
+      return;
+    }
+
+    const client = getAnthropic();
+
+    if (!client) {
+      // Return mock label if no API key
+      res.json({
+        success: true,
+        data: {
+          label: 'Sample Label',
+          confidence: 'low' as const,
+        },
+      });
+      return;
+    }
+
+    // Prepare image for Claude
+    let mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/jpeg';
+    let base64Data = imageBase64;
+
+    if (imageBase64.startsWith('data:')) {
+      const match = imageBase64.match(/^data:(image\/\w+);base64,(.+)$/);
+      if (match) {
+        mediaType = match[1] as typeof mediaType;
+        base64Data = match[2];
+      }
+    }
+
+    const { x, y, width, height } = occlusionRegion;
+
+    const systemPrompt = `You are an expert at analyzing images and identifying text or concepts within specific regions.
+
+## Task
+Look at the highlighted region of the image (approximately at position ${x.toFixed(1)}%, ${y.toFixed(1)}% with size ${width.toFixed(1)}% x ${height.toFixed(1)}% of the image).
+
+Your goal is to identify what text, label, or concept appears in or near that region.
+
+## Guidelines
+- If there's text in the region, extract it exactly as written
+- If there's a labeled part of a diagram, identify what it represents
+- If it's an anatomical, scientific, or technical diagram, use the correct terminology
+- Keep the label concise (1-5 words typically)
+- If you can't identify anything meaningful, respond with an empty label
+
+## Response Format
+Return ONLY valid JSON:
+{"label": "the identified text or concept", "confidence": "high" | "medium" | "low"}
+
+Confidence levels:
+- high: Clear text or well-known labeled element
+- medium: Somewhat visible or context-dependent
+- low: Unclear or making an educated guess`;
+
+    const message = await client.messages.create({
+      model: MODELS.HAIKU, // Use Haiku for fast, simple extraction
+      max_tokens: 200,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: base64Data },
+            },
+            {
+              type: 'text',
+              text: `What text or label is in the region at approximately (${x.toFixed(1)}%, ${y.toFixed(1)}%) with size (${width.toFixed(1)}% x ${height.toFixed(1)}%)? Return JSON only.`,
+            },
+          ],
+        },
+      ],
+      system: systemPrompt,
+    });
+
+    const content = message.content[0];
+    if (content.type !== 'text' || !content.text) {
+      res.json({
+        success: true,
+        data: { label: '', confidence: 'low' as const },
+      });
+      return;
+    }
+
+    const parsed = parseClaudeJSON(content.text);
+
+    res.json({
+      success: true,
+      data: {
+        label: parsed.label || '',
+        confidence: parsed.confidence || 'low',
+      },
+    });
+  } catch (error) {
+    console.error('Error extracting occlusion label:', error);
+    // On error, return empty label (non-blocking)
+    res.json({
+      success: true,
+      data: { label: '', confidence: 'low' as const },
+    });
+  }
+});
+
 // Helper function for mock data
 function generateMockCards(topic: string, count: number, difficulty: string): GeneratedCard[] {
   const templates = [

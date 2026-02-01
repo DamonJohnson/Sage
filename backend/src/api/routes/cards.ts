@@ -30,8 +30,8 @@ router.post('/:deckId/cards', (req: Request, res: Response) => {
     let position = (maxPos.max || 0) + 1;
 
     const insertCard = db.prepare(`
-      INSERT INTO cards (id, deck_id, front, back, front_image, back_image, card_type, options, explanation, cloze_index, position, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      INSERT INTO cards (id, deck_id, front, back, front_image, back_image, card_type, options, explanation, cloze_index, image_occlusion, position, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     `);
 
     const insertMany = db.transaction((cardsToInsert: any[]) => {
@@ -49,6 +49,7 @@ router.post('/:deckId/cards', (req: Request, res: Response) => {
           card.options ? JSON.stringify(card.options) : null,
           card.explanation || null,
           card.clozeIndex || null,
+          card.imageOcclusion ? JSON.stringify(card.imageOcclusion) : null,
           position++
         );
         createdCards.push({
@@ -62,6 +63,7 @@ router.post('/:deckId/cards', (req: Request, res: Response) => {
           options: card.options || null,
           explanation: card.explanation || null,
           clozeIndex: card.clozeIndex || null,
+          imageOcclusion: card.imageOcclusion || null,
           position: position - 1,
         });
       }

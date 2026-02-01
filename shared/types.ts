@@ -150,7 +150,7 @@ export interface PublicDeck extends Deck {
 // Card Types
 // --------------------------------------------
 
-export type CardType = 'flashcard' | 'multiple_choice' | 'cloze';
+export type CardType = 'flashcard' | 'multiple_choice' | 'cloze' | 'image_occlusion';
 
 export interface Card {
   id: string;
@@ -166,6 +166,54 @@ export interface Card {
   position: number;
   createdAt: string;
   updatedAt: string;
+  // Image occlusion fields
+  imageOcclusion: ImageOcclusionData | null; // Only for image_occlusion cards
+}
+
+// --------------------------------------------
+// Image Occlusion Types
+// --------------------------------------------
+
+export type OcclusionShapeType = 'rectangle' | 'ellipse';
+
+// Reveal mode for image occlusion cards
+export type OcclusionRevealMode = 'one_at_a_time' | 'all_at_once';
+
+export interface OcclusionShape {
+  id: string;
+  type: OcclusionShapeType;
+  x: number; // Percentage of image width (0-100)
+  y: number; // Percentage of image height (0-100)
+  width: number; // Percentage of image width
+  height: number; // Percentage of image height
+  label: string; // Optional text answer/label
+  color: string; // Hex color for the occlusion
+  labelSource?: 'manual' | 'ai'; // Track label origin for UI feedback
+}
+
+// Multi-image support: each image with its occlusions
+export interface ImageOcclusionSet {
+  id: string;
+  sourceImage: string; // Base64 data URI
+  occlusions: OcclusionShape[];
+  aspectRatio?: number; // For scaling calculations
+}
+
+export interface ImageOcclusionData {
+  // Legacy fields (kept for backwards compatibility)
+  sourceImage?: string; // Base64 data URI of the source image
+  allOcclusions?: OcclusionShape[]; // All occlusions on this image
+  revealedOcclusionId?: string; // The ID of the occlusion to reveal for this card (one_at_a_time mode)
+
+  // Multi-image fields
+  imageSets?: ImageOcclusionSet[]; // Multiple images with their occlusions
+  activeImageSetId?: string; // Currently displayed image set
+
+  // Reveal mode fields
+  revealMode?: OcclusionRevealMode; // How occlusions are revealed during study
+  revealedOcclusionIds?: string[]; // Array for all_at_once mode or multiple reveals
+
+  occlusionColor: string; // Default color used for occlusions
 }
 
 export interface CardWithState extends Card {

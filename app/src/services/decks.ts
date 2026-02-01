@@ -134,9 +134,10 @@ export async function addCardsAPI(
     back: string;
     frontImage?: string | null;
     backImage?: string | null;
-    cardType?: 'flashcard' | 'multiple_choice';
+    cardType?: 'flashcard' | 'multiple_choice' | 'cloze' | 'image_occlusion';
     options?: string[] | null;
     explanation?: string | null;
+    imageOcclusion?: any | null;
   }>
 ): Promise<APIResponse<Card[]>> {
   const response = await apiRequest<any[]>('POST', `/api/decks/${deckId}/cards`, { cards }, withUserHeader());
@@ -224,6 +225,16 @@ function transformDeckFromAPI(data: any): DeckWithStats {
  * Transform card data from API format to frontend format
  */
 function transformCardFromAPI(data: any): Card {
+  // Parse imageOcclusion if it's a JSON string
+  let imageOcclusion = data.image_occlusion || data.imageOcclusion || null;
+  if (typeof imageOcclusion === 'string') {
+    try {
+      imageOcclusion = JSON.parse(imageOcclusion);
+    } catch (e) {
+      imageOcclusion = null;
+    }
+  }
+
   return {
     id: data.id,
     deckId: data.deck_id || data.deckId,
@@ -234,9 +245,11 @@ function transformCardFromAPI(data: any): Card {
     backImage: data.back_image || data.backImage || null,
     cardType: data.card_type || data.cardType || 'flashcard',
     options: typeof data.options === 'string' ? JSON.parse(data.options) : data.options,
+    clozeIndex: data.cloze_index || data.clozeIndex || null,
     position: data.position || 0,
     createdAt: data.created_at || data.createdAt,
     updatedAt: data.updated_at || data.updatedAt,
+    imageOcclusion,
   };
 }
 
