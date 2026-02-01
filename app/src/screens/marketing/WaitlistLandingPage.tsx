@@ -268,39 +268,87 @@ export function WaitlistLandingPage() {
         </Animated.View>
       </View>
 
-      {/* WAITLIST SIGNUP - Primary CTA */}
-      <View style={[styles.section, { backgroundColor: surface }]} {...(Platform.OS === 'web' ? { nativeID: 'signup' } : {})}>
+      {/* WAITLIST SIGNUP - High Impact CTA */}
+      <View style={styles.waitlistSection} {...(Platform.OS === 'web' ? { nativeID: 'signup' } : {})}>
+        <LinearGradient
+          colors={['#1a1a2e', '#16213e', '#0f3460']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+
         <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
-          {/* Big Savings Badge */}
-          <View style={[styles.savingsBadge, { backgroundColor: accent.green }]}>
-            <Text style={styles.savingsBadgeText}>SAVE $100</Text>
+          {/* Urgency Badge */}
+          <View style={styles.urgencyBadge}>
+            <View style={styles.liveDot} />
+            <Text style={styles.urgencyText}>LIMITED TIME OFFER</Text>
           </View>
 
-          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Waitlist Exclusive: 50% Off Lifetime</Text>
-
-          <View style={styles.priceCompare}>
-            <Text style={[styles.priceCompareOld, { color: textSecondary }]}>$199</Text>
-            <Text style={[styles.priceCompareNew, { color: accent.green }]}>$99</Text>
-            <Text style={[styles.priceCompareLabel, { color: textSecondary }]}>one-time payment</Text>
-          </View>
-
-          <Text style={[styles.sectionSubtitle, { color: textSecondary, marginTop: spacing[4] }]}>
-            Limited time offer for waitlist members only.
+          {/* Main Headline */}
+          <Text style={styles.waitlistHeadline}>
+            Lock In <Text style={{ color: '#4ade80' }}>50% Off</Text> Forever
           </Text>
 
-          <View style={styles.checkList}>
-            {['Pro lifetime access', 'Unlimited decks & flashcards', 'Early beta access', 'Founding Member badge'].map((c, i) => (
-              <View key={i} style={styles.checkRow}>
-                <View style={[styles.checkCircleSmall, { backgroundColor: accent.green }]}>
-                  <Text style={styles.checkMarkSmall}>✓</Text>
+          <Text style={styles.waitlistSubheadline}>
+            Join now and never pay full price
+          </Text>
+
+          {/* Price Card */}
+          <View style={styles.priceCard2}>
+            <View style={styles.priceCardInner}>
+              <Text style={styles.priceCardLabel}>LIFETIME ACCESS</Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.priceOld2}>$199</Text>
+                <View style={styles.priceNew2Container}>
+                  <Text style={styles.priceNew2}>$99</Text>
+                  <View style={styles.saveBadge}>
+                    <Text style={styles.saveBadgeText}>SAVE $100</Text>
+                  </View>
                 </View>
-                <Text style={[styles.checkText, { color: textPrimary }]}>{c}</Text>
+              </View>
+              <Text style={styles.priceCardNote}>One payment. Yours forever. No subscriptions.</Text>
+            </View>
+          </View>
+
+          {/* Benefits Row */}
+          <View style={styles.benefitsRow}>
+            {[
+              { icon: '∞', text: 'Unlimited Everything' },
+              { icon: '⚡', text: 'Early Access' },
+              { icon: '🏆', text: 'Founding Member' },
+            ].map((b, i) => (
+              <View key={i} style={styles.benefitItem}>
+                <Text style={styles.benefitIcon}>{b.icon}</Text>
+                <Text style={styles.benefitText}>{b.text}</Text>
               </View>
             ))}
           </View>
 
-          <SpotsCounter colors={colors} accent={accent} />
-          <WaitlistForm colors={colors} accent={accent} />
+          {/* Signup Form Card */}
+          <View style={styles.signupCard}>
+            <SpotsCounter colors={colors} accent={accent} />
+            <WaitlistForm colors={colors} accent={accent} variant="hero" />
+
+            {/* Trust Signals */}
+            <View style={styles.trustRow}>
+              <Text style={styles.trustText}>🔒 No credit card required</Text>
+              <Text style={styles.trustText}>✉️ Unsubscribe anytime</Text>
+            </View>
+          </View>
+
+          {/* Social Proof */}
+          <View style={styles.socialProofRow}>
+            <View style={styles.avatarStack}>
+              {['👩‍⚕️', '👨‍⚕️', '👩‍🎓', '👨‍🎓'].map((emoji, i) => (
+                <View key={i} style={[styles.avatar, { marginLeft: i > 0 ? -10 : 0, zIndex: 4 - i }]}>
+                  <Text style={styles.avatarEmoji}>{emoji}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.socialProofText}>
+              <Text style={{ fontWeight: '700', color: '#4ade80' }}>373+ students</Text> already on the waitlist
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -694,6 +742,36 @@ const styles = StyleSheet.create({
   footerLogo: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   footerLogoText: { fontSize: typography.sizes.base, fontWeight: '600' },
   footerCopyright: { fontSize: typography.sizes.sm },
+
+  // High Impact Waitlist Section
+  waitlistSection: { paddingVertical: spacing[12], paddingHorizontal: spacing[6], position: 'relative', overflow: 'hidden' },
+  urgencyBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingHorizontal: spacing[4], paddingVertical: spacing[2], borderRadius: borderRadius.full, marginBottom: spacing[4], gap: spacing[2] },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' },
+  urgencyText: { color: '#fca5a5', fontSize: typography.sizes.sm, fontWeight: '700', letterSpacing: 1.5 },
+  waitlistHeadline: { color: '#fff', fontSize: 42, fontWeight: '800', textAlign: 'center', marginBottom: spacing[2], letterSpacing: -1 },
+  waitlistSubheadline: { color: 'rgba(255,255,255,0.7)', fontSize: typography.sizes.xl, textAlign: 'center', marginBottom: spacing[6] },
+  priceCard2: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: borderRadius['2xl'], padding: spacing[1], alignSelf: 'center', marginBottom: spacing[6], borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  priceCardInner: { backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: borderRadius.xl, padding: spacing[6], alignItems: 'center' },
+  priceCardLabel: { color: 'rgba(255,255,255,0.6)', fontSize: typography.sizes.sm, fontWeight: '600', letterSpacing: 2, marginBottom: spacing[2] },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
+  priceOld2: { color: 'rgba(255,255,255,0.4)', fontSize: 32, fontWeight: '600', textDecorationLine: 'line-through' },
+  priceNew2Container: { alignItems: 'center' },
+  priceNew2: { color: '#4ade80', fontSize: 56, fontWeight: '800' },
+  saveBadge: { backgroundColor: '#4ade80', paddingHorizontal: spacing[3], paddingVertical: spacing[1], borderRadius: borderRadius.full, marginTop: spacing[1] },
+  saveBadgeText: { color: '#000', fontSize: 12, fontWeight: '800' },
+  priceCardNote: { color: 'rgba(255,255,255,0.6)', fontSize: typography.sizes.sm, marginTop: spacing[3], textAlign: 'center' },
+  benefitsRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing[6], marginBottom: spacing[6], flexWrap: 'wrap' },
+  benefitItem: { alignItems: 'center', gap: spacing[1] },
+  benefitIcon: { fontSize: 24 },
+  benefitText: { color: 'rgba(255,255,255,0.8)', fontSize: typography.sizes.sm, fontWeight: '500' },
+  signupCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: borderRadius['2xl'], padding: spacing[6], maxWidth: 480, alignSelf: 'center', width: '100%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  trustRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing[4], marginTop: spacing[4], flexWrap: 'wrap' },
+  trustText: { color: 'rgba(255,255,255,0.5)', fontSize: typography.sizes.sm },
+  socialProofRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[3], marginTop: spacing[6] },
+  avatarStack: { flexDirection: 'row' },
+  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#1a1a2e' },
+  avatarEmoji: { fontSize: 16 },
+  socialProofText: { color: 'rgba(255,255,255,0.7)', fontSize: typography.sizes.sm },
 });
 
 export default WaitlistLandingPage;
