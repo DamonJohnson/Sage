@@ -446,13 +446,25 @@ export function WaitlistLandingPage() {
       {/* FOUNDING MEMBERS */}
       <View style={[styles.section, { backgroundColor: surface }]} {...(Platform.OS === 'web' ? { nativeID: 'signup' } : {})}>
         <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
+          {/* Big Savings Badge */}
+          <View style={[styles.savingsBadge, { backgroundColor: accent.green }]}>
+            <Text style={styles.savingsBadgeText}>SAVE $100</Text>
+          </View>
+
           <Text style={[styles.sectionTitle, { color: textPrimary }]}>Waitlist Exclusive: 50% Off Lifetime</Text>
-          <Text style={[styles.sectionSubtitle, { color: textSecondary }]}>
-            Get Pro lifetime access for $99 (normally $199). Limited time offer for waitlist members only.
+
+          <View style={styles.priceCompare}>
+            <Text style={[styles.priceCompareOld, { color: textSecondary }]}>$199</Text>
+            <Text style={[styles.priceCompareNew, { color: accent.green }]}>$99</Text>
+            <Text style={[styles.priceCompareLabel, { color: textSecondary }]}>one-time payment</Text>
+          </View>
+
+          <Text style={[styles.sectionSubtitle, { color: textSecondary, marginTop: spacing[4] }]}>
+            Limited time offer for waitlist members only.
           </Text>
 
           <View style={styles.checkList}>
-            {['Pro lifetime access', '$99 one-time (save $99)', 'Early beta access', 'Founding Member badge'].map((c, i) => (
+            {['Pro lifetime access', 'Unlimited decks & flashcards', 'Early beta access', 'Founding Member badge'].map((c, i) => (
               <View key={i} style={styles.checkRow}>
                 <View style={[styles.checkCircleSmall, { backgroundColor: accent.green }]}>
                   <Text style={styles.checkMarkSmall}>✓</Text>
@@ -625,6 +637,12 @@ const styles = StyleSheet.create({
   checkText: { fontSize: typography.sizes.base },
   checkCircleSmall: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   checkMarkSmall: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  savingsBadge: { paddingHorizontal: spacing[5], paddingVertical: spacing[2], borderRadius: borderRadius.full, alignSelf: 'center', marginBottom: spacing[4] },
+  savingsBadgeText: { color: '#fff', fontSize: typography.sizes.lg, fontWeight: '800', letterSpacing: 1 },
+  priceCompare: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[3], marginTop: spacing[2] },
+  priceCompareOld: { fontSize: typography.sizes['2xl'], textDecorationLine: 'line-through', opacity: 0.6 },
+  priceCompareNew: { fontSize: typography.sizes['4xl'], fontWeight: '800' },
+  priceCompareLabel: { fontSize: typography.sizes.base },
 
   // Counter
   counterWrap: { alignItems: 'center', marginBottom: spacing[6] },
