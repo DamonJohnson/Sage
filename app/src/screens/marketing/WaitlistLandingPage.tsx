@@ -37,8 +37,9 @@ const CARD_TYPES = [
 ];
 
 // Pricing
-const FREE_FEATURES = ['20 AI cards/month', 'Basic image occlusion', 'Spaced repetition', 'Anki import', 'Community decks'];
-const PRO_FEATURES = ['Unlimited AI generation', 'All card types', 'All creation modes', 'Full community access', 'Advanced analytics'];
+const FREE_FEATURES = ['5 decks', '50 flashcards', 'Basic features', 'Spaced repetition'];
+const STANDARD_FEATURES = ['10 decks', '200 flashcards', 'All card types', 'Priority support'];
+const PRO_FEATURES = ['Unlimited decks', 'Unlimited flashcards', 'All features', 'Advanced analytics', 'Priority support'];
 
 // FAQ
 const FAQ_DATA = [
@@ -390,33 +391,48 @@ export function WaitlistLandingPage() {
           <Text style={[styles.sectionTitle, { color: textPrimary }]}>Simple Plans</Text>
 
           <View style={[styles.pricingRow, !isDesktop && styles.pricingRowStack]}>
+            {/* Free Tier */}
             <View style={[styles.priceCard, { backgroundColor: surface, borderColor: border }]}>
               <Text style={[styles.tierName, { color: textPrimary }]}>Free</Text>
               <Text style={[styles.price, { color: textPrimary }]}>$0</Text>
+              <Text style={[styles.priceMonthly, { color: textSecondary }]}>Forever free</Text>
               <View style={styles.priceFeatures}>
                 {FREE_FEATURES.map((f, i) => (
                   <View key={i} style={styles.priceFeatureRow}>
-                    <Ionicons name="checkmark" size={16} color={accent.green} />
+                    <Text style={{ color: accent.green, marginRight: 8 }}>✓</Text>
                     <Text style={[styles.priceFeatureText, { color: textSecondary }]}>{f}</Text>
                   </View>
                 ))}
               </View>
             </View>
 
+            {/* Standard Tier */}
+            <View style={[styles.priceCard, { backgroundColor: surface, borderColor: border }]}>
+              <Text style={[styles.tierName, { color: textPrimary }]}>Standard</Text>
+              <Text style={[styles.price, { color: textPrimary }]}>$59.99<Text style={styles.priceUnit}>/yr</Text></Text>
+              <Text style={[styles.priceMonthly, { color: textSecondary }]}>or $7.99/month</Text>
+              <View style={styles.priceFeatures}>
+                {STANDARD_FEATURES.map((f, i) => (
+                  <View key={i} style={styles.priceFeatureRow}>
+                    <Text style={{ color: accent.green, marginRight: 8 }}>✓</Text>
+                    <Text style={[styles.priceFeatureText, { color: textSecondary }]}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Pro Tier */}
             <View style={[styles.priceCard, styles.priceCardPro, { backgroundColor: surface, borderColor: accent.orange }]}>
               <View style={[styles.badge, { backgroundColor: accent.orange }]}>
-                <Text style={styles.badgeText}>Most Popular</Text>
+                <Text style={styles.badgeText}>Best Value</Text>
               </View>
               <Text style={[styles.tierName, { color: textPrimary }]}>Pro</Text>
-              <View style={styles.priceWrap}>
-                <Text style={[styles.priceOld, { color: textSecondary }]}>$149</Text>
-                <Text style={[styles.price, { color: textPrimary }]}>$79<Text style={styles.priceUnit}>/yr</Text></Text>
-              </View>
-              <Text style={[styles.priceMonthly, { color: textSecondary }]}>$6.58/month</Text>
+              <Text style={[styles.price, { color: textPrimary }]}>$100<Text style={styles.priceUnit}>/yr</Text></Text>
+              <Text style={[styles.priceMonthly, { color: textSecondary }]}>or $15/month · $200 lifetime</Text>
               <View style={styles.priceFeatures}>
                 {PRO_FEATURES.map((f, i) => (
                   <View key={i} style={styles.priceFeatureRow}>
-                    <Ionicons name="checkmark" size={16} color={accent.green} />
+                    <Text style={{ color: accent.green, marginRight: 8 }}>✓</Text>
                     <Text style={[styles.priceFeatureText, { color: textSecondary }]}>{f}</Text>
                   </View>
                 ))}
@@ -430,15 +446,17 @@ export function WaitlistLandingPage() {
       {/* FOUNDING MEMBERS */}
       <View style={[styles.section, { backgroundColor: surface }]} {...(Platform.OS === 'web' ? { nativeID: 'signup' } : {})}>
         <View style={[styles.sectionContent, { maxWidth: containerMaxWidth }]}>
-          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Join the Founding 500</Text>
+          <Text style={[styles.sectionTitle, { color: textPrimary }]}>Waitlist Exclusive: 50% Off Lifetime</Text>
           <Text style={[styles.sectionSubtitle, { color: textSecondary }]}>
-            $79/year locked for life. After 500 spots, price goes to $149—permanently.
+            Get Pro lifetime access for $100 (normally $200). Limited time offer for waitlist members only.
           </Text>
 
           <View style={styles.checkList}>
-            {['Beta access now', '$79/year forever', 'Direct input on features', 'Founding Member badge'].map((c, i) => (
+            {['Pro lifetime access', '$100 one-time (save $100)', 'Early beta access', 'Founding Member badge'].map((c, i) => (
               <View key={i} style={styles.checkRow}>
-                <Ionicons name="checkmark-circle" size={20} color={accent.green} />
+                <View style={[styles.checkCircleSmall, { backgroundColor: accent.green }]}>
+                  <Text style={styles.checkMarkSmall}>✓</Text>
+                </View>
                 <Text style={[styles.checkText, { color: textPrimary }]}>{c}</Text>
               </View>
             ))}
@@ -605,6 +623,8 @@ const styles = StyleSheet.create({
   checkList: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing[4], marginBottom: spacing[8] },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   checkText: { fontSize: typography.sizes.base },
+  checkCircleSmall: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  checkMarkSmall: { color: '#fff', fontSize: 12, fontWeight: '700' },
 
   // Counter
   counterWrap: { alignItems: 'center', marginBottom: spacing[6] },
