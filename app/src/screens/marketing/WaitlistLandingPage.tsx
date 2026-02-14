@@ -124,7 +124,7 @@ function WaitlistForm({ onSubmit }: { onSubmit?: () => void }) {
     setError(null);
 
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://sagebackend-production.up.railway.app';
+      const apiUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://sagebackend-production.up.railway.app').trim();
       const response = await fetch(`${apiUrl}/api/waitlist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -192,7 +192,7 @@ function SpotsCounter({ onCountLoaded }: { onCountLoaded?: (count: number) => vo
   useEffect(() => {
     const fetchCount = async () => {
       try {
-        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://sagebackend-production.up.railway.app';
+        const apiUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://sagebackend-production.up.railway.app').trim();
         const response = await fetch(`${apiUrl}/api/waitlist/count`);
         const data = await response.json();
         if (data.success) {
