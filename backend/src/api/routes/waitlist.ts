@@ -49,6 +49,8 @@ router.post('/', async (req: Request, res: Response) => {
       .single();
 
     if (existing) {
+      // Still trigger webhook for testing purposes
+      await triggerMakeWebhook({ email: normalizedEmail, source, referrer });
       return res.json({
         success: true,
         message: 'Already on waitlist',
