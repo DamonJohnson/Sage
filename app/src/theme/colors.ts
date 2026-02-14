@@ -26,11 +26,11 @@ export const darkTheme = {
   },
 } as const;
 
-// Light Mode Colors - Clean with blue and orange accents
+// Light Mode Colors - Clean with navy buttons and orange accents
 // Design principles:
-// - Light background with navy blue accents
+// - Light background with navy blue buttons/accents
 // - White cards with subtle blue tints
-// - Orange and blue as complementary accents
+// - Navy primary, orange secondary
 export const lightTheme = {
   // Core surfaces - light with blue hints
   background: '#f8fafc',      // Very light blue-grey
@@ -44,9 +44,9 @@ export const lightTheme = {
     secondary: '#64748b',     // Slate grey
   },
 
-  // Accent colors
+  // Accent colors - navy primary for buttons
   accent: {
-    orange: '#ea580c',        // Deep orange for contrast
+    orange: '#1e293b',        // Navy blue for primary buttons
     green: '#16a34a',         // Vibrant green
     red: '#dc2626',           // Clear red
     purple: '#7c3aed',        // Vibrant purple

@@ -249,8 +249,9 @@ export function RootNavigator() {
   const { isAuthenticated, needsProfileSetup, hasSeenOnboarding, checkAuthStatus, completeProfileSetup, completeOnboarding } = useAuthStore();
   const { loadDecks } = useDeckStore();
 
-  // Check if we're on the waitlist page (web only)
-  const isWaitlistPage = Platform.OS === 'web' && typeof window !== 'undefined' && window.location.pathname === '/waitlist';
+  // TEMPORARY: Block all routes and show only waitlist
+  // TODO: Remove this when ready to launch the full app
+  const isWaitlistOnly = true;
 
   // Check auth status on mount
   useEffect(() => {
@@ -298,8 +299,9 @@ export function RootNavigator() {
     setShowAuth(true);
   };
 
-  // Show waitlist page if on /waitlist URL (public, no auth required)
-  if (isWaitlistPage) {
+  // TEMPORARY: Show only waitlist page, block all other routes
+  // TODO: Remove this block when ready to launch the full app
+  if (isWaitlistOnly) {
     return (
       <NavigationContainer theme={navigationTheme}>
         <WaitlistLandingPage />

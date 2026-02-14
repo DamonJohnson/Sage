@@ -224,7 +224,11 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
         <TouchableOpacity
           style={[
             styles.themeToggle,
-            { backgroundColor: themeHovered ? surfaceHover : surface },
+            {
+              backgroundColor: themeHovered ? surfaceHover : surface,
+              borderWidth: isDark ? 0 : 1,
+              borderColor: border,
+            },
             webButtonStyle,
           ]}
           onPress={() => {

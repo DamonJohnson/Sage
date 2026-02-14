@@ -55,12 +55,29 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  // Once hydrated, use the persisted settings
+  // Once hydrated, sync localStorage and zustand
+  // Prioritize localStorage (web) since it's faster and more reliable
   useEffect(() => {
-    if (isHydrated && settings?.theme) {
-      setLocalTheme(settings.theme as ThemeSetting);
+    if (isHydrated) {
+      // On web, localStorage is the source of truth
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        try {
+          const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+          if (storedTheme && (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system')) {
+            // Sync zustand with localStorage if different
+            if (settings?.theme !== storedTheme) {
+              updateSettings({ theme: storedTheme });
+            }
+            return; // localStorage takes priority
+          }
+        } catch (e) {}
+      }
+      // Fall back to zustand settings if no localStorage
+      if (settings?.theme) {
+        setLocalTheme(settings.theme as ThemeSetting);
+      }
     }
-  }, [isHydrated, settings?.theme]);
+  }, [isHydrated]);
 
   // Get the theme setting - use local state for instant response
   const themeSetting: ThemeSetting = localTheme;

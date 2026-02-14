@@ -23,8 +23,12 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // FAQ - designed to showcase features and handle objections
 const FAQ_DATA = [
   {
-    q: "What's included in the $99 lifetime deal?",
-    a: "Everything. Unlimited decks, unlimited cards, all creation modes (PDF, AI, Image Occlusion), full Anki import, spaced repetition algorithm, and every future feature we build. One payment, yours forever."
+    q: "Is the waitlist really free?",
+    a: "Yes, completely free. No credit card, no payment. You're just reserving your spot to get 50% off lifetime access when we launch in 2 weeks."
+  },
+  {
+    q: "What do I get as a waitlist member?",
+    a: "You lock in 50% off lifetime access. That includes unlimited decks, all creation modes, AI features, Anki import, and every future feature we build."
   },
   {
     q: "How is this different from Anki?",
@@ -35,20 +39,12 @@ const FAQ_DATA = [
     a: "Yes. One-click .apkg import. Your cards, scheduling data, and tags all transfer. Nothing is lost. You can keep using both if you want."
   },
   {
-    q: "How does Image Occlusion work for anatomy?",
-    a: "Upload any image, draw boxes over structures you want to memorise, and Sage generates flashcards automatically. Perfect for anatomy diagrams, histology slides, and radiology images. The proven method used by top medical students."
+    q: "How does Image Occlusion work?",
+    a: "Upload any image, draw boxes over parts you want to memorise, and Sage generates flashcards automatically. Perfect for diagrams, charts, maps, or any visual content you need to learn."
   },
   {
     q: "What if the AI generates wrong cards?",
     a: "Edit any card instantly. The AI gets you 90% there in seconds. You refine the rest. Still faster than making everything from scratch."
-  },
-  {
-    q: "Why is it only $99 right now?",
-    a: "We're building our founding user base. The 500 founding members get lifetime access at 50% off. After that, it's $199 for lifetime or $15/month. This price won't come back."
-  },
-  {
-    q: "What if it's not for me?",
-    a: "30-day money-back guarantee. No questions asked. Try it risk-free."
   },
   {
     q: "Is my data private?",
@@ -136,8 +132,8 @@ function WaitlistForm({ onSubmit }: { onSubmit?: () => void }) {
 }
 
 // Spots Counter Component
-function SpotsCounter() {
-  const [spots, setSpots] = useState({ remaining: 127, total: 500 });
+function SpotsCounter({ onCountLoaded }: { onCountLoaded?: (count: number) => void }) {
+  const [spots, setSpots] = useState({ remaining: 127, total: 500, count: 373 });
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -146,12 +142,17 @@ function SpotsCounter() {
         const response = await fetch(`${apiUrl}/api/waitlist/count`);
         const data = await response.json();
         if (data.success) {
-          setSpots({ remaining: data.data.spotsRemaining, total: data.data.totalSpots });
+          setSpots({
+            remaining: data.data.spotsRemaining,
+            total: data.data.totalSpots,
+            count: data.data.count,
+          });
+          onCountLoaded?.(data.data.count);
         }
       } catch (e) {}
     };
     fetchCount();
-  }, []);
+  }, [onCountLoaded]);
 
   const progress = ((spots.total - spots.remaining) / spots.total) * 100;
 
@@ -174,6 +175,7 @@ export default function WaitlistLandingPage() {
   const containerMaxWidth = isDesktop ? 1100 : '100%';
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const [waitlistCount, setWaitlistCount] = useState(373);
 
   useEffect(() => {
     Animated.parallel([
@@ -214,11 +216,8 @@ export default function WaitlistLandingPage() {
           {/* Badge */}
           <View style={styles.badge}>
             <View style={styles.badgeDot} />
-            <Text style={styles.badgeText}>LIMITED TIME: 50% OFF LIFETIME</Text>
+            <Text style={styles.badgeText}>FREE TO JOIN</Text>
           </View>
-
-          {/* Target audience */}
-          <Text style={styles.forText}>Built for Medical Students</Text>
 
           {/* Headline */}
           <Text style={[styles.headline, isDesktop && styles.headlineDesktop]}>
@@ -230,29 +229,24 @@ export default function WaitlistLandingPage() {
             The proven way to memorise anything. Master anatomy with image occlusion, learn pharmacology with AI-generated cards, and ace your exams with spaced repetition.
           </Text>
 
-          {/* Price */}
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceOld}>$199</Text>
-            <Text style={styles.priceNew}>$99</Text>
-            <Text style={styles.priceLabel}>lifetime access</Text>
-          </View>
-
           {/* Form */}
           <View style={styles.formCard}>
-            <SpotsCounter />
+            <Text style={styles.formTitle}>Join the Waitlist for Free</Text>
+            <Text style={styles.formSubtitle}>Lock in 50% off lifetime access — launching in 2 weeks</Text>
+            <SpotsCounter onCountLoaded={setWaitlistCount} />
             <WaitlistForm />
-            <Text style={styles.trustText}>No credit card required. Unsubscribe anytime.</Text>
+            <Text style={styles.trustText}>No payment required. No spam. Unsubscribe anytime.</Text>
           </View>
 
           {/* Social proof */}
           <Text style={styles.socialProof}>
-            Join <Text style={styles.socialProofHighlight}>373+ students</Text> on the waitlist
+            Join <Text style={styles.socialProofHighlight}>{waitlistCount}+ students</Text> already on the waitlist
           </Text>
         </Animated.View>
 
         {/* CREATE FROM ANYTHING */}
         <View style={[styles.section, { maxWidth: containerMaxWidth }]}>
-          <Text style={styles.sectionTitle}>Create Cards From Anything</Text>
+          <Text style={[styles.sectionTitle, { marginBottom: spacing[8] }]}>Create Cards From Anything</Text>
 
           <View style={styles.createMethods}>
             {[
@@ -280,7 +274,7 @@ export default function WaitlistLandingPage() {
 
         {/* FAQ */}
         <View style={[styles.section, { maxWidth: containerMaxWidth }]}>
-          <Text style={styles.sectionTitle}>FAQ</Text>
+          <Text style={[styles.sectionTitle, { marginBottom: spacing[8] }]}>FAQ</Text>
 
           <View style={styles.faqList}>
             {FAQ_DATA.map((faq, i) => (
@@ -294,9 +288,10 @@ export default function WaitlistLandingPage() {
 
         {/* FINAL CTA */}
         <View style={[styles.finalCta, { maxWidth: containerMaxWidth }]}>
-          <Text style={styles.finalTitle}>Ready to save hours every week?</Text>
+          <Text style={styles.finalTitle}>Ready to study smarter?</Text>
+          <Text style={styles.finalSubtitle}>Join free and lock in 50% off lifetime access</Text>
           <TouchableOpacity style={styles.finalBtn} onPress={scrollToSignup} activeOpacity={0.8}>
-            <Text style={styles.finalBtnText}>Join the Waitlist</Text>
+            <Text style={styles.finalBtnText}>Join the Waitlist — It's Free</Text>
             <Ionicons name="arrow-forward" size={18} color="#000" />
           </TouchableOpacity>
         </View>
@@ -324,20 +319,15 @@ const styles = StyleSheet.create({
   badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(249, 115, 22, 0.15)', paddingHorizontal: spacing[4], paddingVertical: spacing[2], borderRadius: 100, marginBottom: spacing[6], gap: spacing[2] },
   badgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#f97316' },
   badgeText: { color: '#f97316', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  forText: { color: '#f97316', fontSize: 14, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase', marginBottom: spacing[3] },
   headline: { color: '#fff', fontSize: 36, fontWeight: '800', textAlign: 'center', lineHeight: 44, marginBottom: spacing[4] },
   headlineDesktop: { fontSize: 52, lineHeight: 60 },
   headlineAccent: { color: '#4ade80' },
   subheadline: { color: 'rgba(255,255,255,0.7)', fontSize: 18, textAlign: 'center', marginBottom: spacing[6], maxWidth: 500 },
 
-  // Price
-  priceContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginBottom: spacing[6] },
-  priceOld: { color: 'rgba(255,255,255,0.4)', fontSize: 24, textDecorationLine: 'line-through' },
-  priceNew: { color: '#4ade80', fontSize: 48, fontWeight: '800' },
-  priceLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
-
   // Form Card
   formCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, padding: spacing[6], width: '100%', maxWidth: 440, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  formTitle: { color: '#fff', fontSize: 22, fontWeight: '700', textAlign: 'center', marginBottom: spacing[1] },
+  formSubtitle: { color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', marginBottom: spacing[4] },
   formWrapper: { width: '100%' },
   formRow: { flexDirection: 'row', gap: spacing[3] },
   formRowMobile: { flexDirection: 'column' },
@@ -368,7 +358,7 @@ const styles = StyleSheet.create({
 
   // Section
   section: { width: '100%', paddingHorizontal: spacing[6], paddingVertical: spacing[10] },
-  sectionTitle: { color: '#fff', fontSize: 28, fontWeight: '700', textAlign: 'center', marginBottom: spacing[8] },
+  sectionTitle: { color: '#fff', fontSize: 28, fontWeight: '700', textAlign: 'center', marginBottom: spacing[2] },
 
   // Features
   featuresGrid: { gap: spacing[4] },
@@ -405,7 +395,8 @@ const styles = StyleSheet.create({
 
   // Final CTA
   finalCta: { width: '100%', paddingHorizontal: spacing[6], paddingVertical: spacing[10], alignItems: 'center' },
-  finalTitle: { color: '#fff', fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: spacing[5] },
+  finalTitle: { color: '#fff', fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: spacing[2] },
+  finalSubtitle: { color: 'rgba(255,255,255,0.6)', fontSize: 16, textAlign: 'center', marginBottom: spacing[5] },
   finalBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#4ade80', paddingHorizontal: spacing[6], paddingVertical: spacing[4], borderRadius: 12, gap: spacing[2] },
   finalBtnText: { color: '#000', fontSize: 16, fontWeight: '700' },
 
