@@ -177,7 +177,7 @@ function WaitlistForm({ onSubmit }: { onSubmit?: () => void }) {
           activeOpacity={0.8}
         >
           <Text style={styles.submitBtnText}>{isLoading ? 'Joining...' : 'Reserve My Spot'}</Text>
-          {!isLoading && <Ionicons name="arrow-forward" size={18} color="#000" />}
+          {!isLoading && <Text style={styles.submitBtnArrow}>→</Text>}
         </TouchableOpacity>
       </View>
       {error && <Text style={styles.errorText}>{error}</Text>}
@@ -294,14 +294,14 @@ export default function WaitlistLandingPage() {
             {VALUE_STACK.map((item, i) => (
               <View key={i} style={styles.valueRow}>
                 <View style={styles.valueGet}>
-                  <Ionicons name="checkmark-circle" size={20} color="#4ade80" style={styles.valueIcon} />
+                  <Text style={[styles.valueIcon, { color: '#4ade80', fontSize: 18 }]}>✓</Text>
                   <View style={styles.valueGetContent}>
                     <Text style={styles.valueFeature}>{item.feature}</Text>
                     <Text style={styles.valueDesc}>{item.description}</Text>
                   </View>
                 </View>
                 <View style={styles.valueReplace}>
-                  <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.3)" style={styles.valueIcon} />
+                  <Text style={[styles.valueIcon, { color: 'rgba(255,255,255,0.3)', fontSize: 14 }]}>✗</Text>
                   <Text style={styles.valueReplaceText}>{item.replaces}</Text>
                 </View>
               </View>
@@ -349,7 +349,7 @@ export default function WaitlistLandingPage() {
           <Text style={styles.finalSubtitle}>Founding member pricing disappears when we launch. Lock in your spot now — it takes 10 seconds and costs nothing.</Text>
           <TouchableOpacity style={styles.finalBtn} onPress={scrollToSignup} activeOpacity={0.8}>
             <Text style={styles.finalBtnText}>Reserve My Spot</Text>
-            <Ionicons name="arrow-forward" size={18} color="#000" />
+            <Text style={styles.finalBtnArrow}>→</Text>
           </TouchableOpacity>
           <Text style={styles.finalMicrocopy}>No payment required · No spam · Unsubscribe anytime</Text>
         </View>
@@ -388,6 +388,7 @@ const styles = StyleSheet.create({
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#4ade80', paddingHorizontal: spacing[4], paddingVertical: spacing[3.5], borderRadius: 12, gap: spacing[2] },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { color: '#000', fontSize: 16, fontWeight: '700' },
+  submitBtnArrow: { color: '#000', fontSize: 18, marginLeft: 4 },
   errorText: { color: '#f87171', fontSize: 14, marginTop: spacing[2], textAlign: 'center' },
   trustText: { color: 'rgba(255,255,255,0.5)', fontSize: 13, textAlign: 'center', marginTop: spacing[4] },
 
@@ -445,6 +446,7 @@ const styles = StyleSheet.create({
   finalSubtitle: { color: 'rgba(255,255,255,0.6)', fontSize: 15, textAlign: 'center', marginBottom: spacing[5], maxWidth: 500, lineHeight: 24, paddingHorizontal: spacing[2] },
   finalBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#4ade80', paddingHorizontal: spacing[6], paddingVertical: spacing[4], borderRadius: 12, gap: spacing[2] },
   finalBtnText: { color: '#000', fontSize: 16, fontWeight: '700' },
+  finalBtnArrow: { color: '#000', fontSize: 18, marginLeft: 4 },
   finalMicrocopy: { color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: spacing[4] },
 
   // Footer
