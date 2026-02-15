@@ -50,7 +50,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       iconColor: accent.orange,
       iconBg: accent.orange + '20',
       title: 'Learn Anything,\nRemember Forever',
-      subtitle: 'Sage schedules your reviews at the perfect time—right before you forget.',
+      subtitle: 'Sage schedules your reviews at the perfect time, right before you forget.',
     },
     {
       id: 'start',

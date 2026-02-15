@@ -41,33 +41,16 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    // Check if email already exists
-    const { data: existing } = await supabase
-      .from('waitlist')
-      .select('id')
-      .eq('email', normalizedEmail)
-      .single();
-
-    if (existing) {
-      // Still trigger webhook for testing purposes
-      await triggerMakeWebhook({ email: normalizedEmail, source, referrer });
-      return res.json({
-        success: true,
-        message: 'Already on waitlist',
-        alreadyExists: true,
-      });
-    }
-
-    // Insert into Supabase
-    const { error } = await supabase.from('waitlist').insert({
+    // Insert into Supabase (ignore if already exists)
+    const { error } = await supabase.from('waitlist').upsert({
       email: normalizedEmail,
       source,
       referrer: referrer || null,
-    });
+    }, { onConflict: 'email', ignoreDuplicates: true });
 
     if (error) {
       console.error('Supabase insert error:', error);
-      throw error;
+      // Don't throw - still trigger webhook
     }
 
     // Trigger Make webhook for automation (email + Google Sheets backup)

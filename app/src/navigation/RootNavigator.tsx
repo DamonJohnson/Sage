@@ -299,11 +299,16 @@ export function RootNavigator() {
     setShowAuth(true);
   };
 
+  // Document title configuration for web
+  const documentTitle = {
+    formatter: () => 'Sage Study',
+  };
+
   // TEMPORARY: Show only waitlist page, block all other routes
   // TODO: Remove this block when ready to launch the full app
   if (isWaitlistOnly) {
     return (
-      <NavigationContainer theme={navigationTheme}>
+      <NavigationContainer theme={navigationTheme} documentTitle={documentTitle}>
         <WaitlistLandingPage />
       </NavigationContainer>
     );
@@ -312,7 +317,7 @@ export function RootNavigator() {
   // Show landing or login screen if not authenticated
   if (!isAuthenticated) {
     return (
-      <NavigationContainer theme={navigationTheme}>
+      <NavigationContainer theme={navigationTheme} documentTitle={documentTitle}>
         {showAuth ? (
           <LoginScreen initialIsSignUp={isSignUp} onBack={() => setShowAuth(false)} />
         ) : (
@@ -325,7 +330,7 @@ export function RootNavigator() {
   // Show profile setup screen for new users
   if (needsProfileSetup) {
     return (
-      <NavigationContainer theme={navigationTheme}>
+      <NavigationContainer theme={navigationTheme} documentTitle={documentTitle}>
         <ProfileSetupScreen onComplete={completeProfileSetup} />
       </NavigationContainer>
     );
@@ -337,6 +342,7 @@ export function RootNavigator() {
       onStateChange={forceUpdate}
       theme={navigationTheme}
       linking={linking}
+      documentTitle={documentTitle}
     >
       <ResponsiveLayout navigationRef={navigationRef}>
         <MainNavigator />

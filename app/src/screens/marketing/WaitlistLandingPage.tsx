@@ -13,12 +13,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import ConfettiCannon from 'react-native-confetti-cannon';
 
 import { RadiatingLogo } from '@/components/ui';
 import { useResponsive } from '@/hooks/useResponsive';
 import { spacing, typography, borderRadius } from '@/theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Value stack data
 const VALUE_STACK = [
@@ -82,7 +83,7 @@ const STEPS = [
 const FAQ_DATA = [
   {
     q: "Is the waitlist really free?",
-    a: "Yes. No card, no payment. You're reserving your right to founding member pricing — 50% off lifetime access, locked in permanently."
+    a: "Yes. No card, no payment. You're reserving your right to founding member pricing: 50% off lifetime access, locked in permanently."
   },
   {
     q: "What exactly do founding members get?",
@@ -90,11 +91,11 @@ const FAQ_DATA = [
   },
   {
     q: "How is this different from Anki?",
-    a: "Same proven spaced repetition science. None of the friction. Anki is a blank canvas that takes hours to set up. Sage gives you a complete study system — upload a PDF, get a deck, start studying. What takes 30 minutes in Anki takes 30 seconds here."
+    a: "Same proven spaced repetition science. None of the friction. Anki is a blank canvas that takes hours to set up. Sage gives you a complete study system. Upload a PDF, get a deck, start studying. What takes 30 minutes in Anki takes 30 seconds here."
   },
   {
     q: "Can I import my Anki decks?",
-    a: "One click. Your cards, scheduling data, and tags all transfer. Nothing lost. Use both if you want — but most people don't go back."
+    a: "One click. Your cards, scheduling data, and tags all transfer. Nothing lost. Use both if you want, but most people don't go back."
   },
   {
     q: "What if the AI gets a card wrong?",
@@ -107,7 +108,7 @@ const FAQ_DATA = [
 ];
 
 // Waitlist Form Component
-function WaitlistForm({ onSubmit }: { onSubmit?: () => void }) {
+function WaitlistForm({ onSubmit, confettiRef }: { onSubmit?: () => void; confettiRef?: React.RefObject<ConfettiCannon> }) {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -134,6 +135,7 @@ function WaitlistForm({ onSubmit }: { onSubmit?: () => void }) {
       const data = await response.json();
       if (data.success) {
         setSubmitted(true);
+        confettiRef?.current?.start();
         onSubmit?.();
       } else {
         setError(data.error || 'Something went wrong.');
@@ -187,13 +189,12 @@ function WaitlistForm({ onSubmit }: { onSubmit?: () => void }) {
 
 // Spots Counter Component
 function SpotsCounter({ onCountLoaded }: { onCountLoaded?: (count: number) => void }) {
-  const [spots, setSpots] = useState({ remaining: 127, total: 500, count: 373 });
+  const [spots, setSpots] = useState({ remaining: 500, total: 500, count: 0 });
 
   useEffect(() => {
     const fetchCount = async () => {
       try {
-        const apiUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://sagebackend-production.up.railway.app').trim();
-        const response = await fetch(`${apiUrl}/api/waitlist/count`);
+        const response = await fetch('https://sagebackend-production.up.railway.app/api/waitlist/count');
         const data = await response.json();
         if (data.success) {
           setSpots({
@@ -203,10 +204,12 @@ function SpotsCounter({ onCountLoaded }: { onCountLoaded?: (count: number) => vo
           });
           onCountLoaded?.(data.data.count);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Failed to fetch waitlist count:', e);
+      }
     };
     fetchCount();
-  }, [onCountLoaded]);
+  }, []);
 
   const progress = ((spots.total - spots.remaining) / spots.total) * 100;
 
@@ -216,7 +219,7 @@ function SpotsCounter({ onCountLoaded }: { onCountLoaded?: (count: number) => vo
         <View style={[styles.spotsProgress, { width: `${progress}%` }]} />
       </View>
       <Text style={styles.spotsText}>
-        <Text style={styles.spotsHighlight}>{spots.remaining}</Text> of {spots.total} founding spots remaining — {spots.count} students already locked in
+        <Text style={styles.spotsHighlight}>{spots.remaining}</Text> of {spots.total} founding spots remaining. {spots.count} students already locked in
       </Text>
     </View>
   );
@@ -230,6 +233,7 @@ export default function WaitlistLandingPage() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const [waitlistCount, setWaitlistCount] = useState(373);
+  const confettiRef = useRef<ConfettiCannon>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -253,6 +257,17 @@ export default function WaitlistLandingPage() {
         end={{ x: 1, y: 1 }}
       />
 
+      {/* Confetti celebration */}
+      <ConfettiCannon
+        ref={confettiRef}
+        count={200}
+        origin={{ x: SCREEN_WIDTH / 2, y: 0 }}
+        autoStart={false}
+        fadeOut={true}
+        fallSpeed={3000}
+        colors={['#f97316', '#fb923c', '#fdba74', '#4ade80', '#ffffff']}
+      />
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* NAV */}
         <View style={[styles.nav, { paddingTop: insets.top + spacing[2], maxWidth: containerMaxWidth }]}>
@@ -274,13 +289,13 @@ export default function WaitlistLandingPage() {
           </Text>
 
           <Text style={styles.subheadline}>
-            The AI-powered flashcard app that turns your lecture slides into exam-ready cards in 30 seconds — then tells you exactly what to study and when.
+            The AI-powered flashcard app that turns your lecture slides into exam-ready cards in 30 seconds, then tells you exactly what to study and when.
           </Text>
 
           {/* Form */}
           <View style={styles.formCard}>
             <SpotsCounter onCountLoaded={setWaitlistCount} />
-            <WaitlistForm />
+            <WaitlistForm confettiRef={confettiRef} />
             <Text style={styles.trustText}>50% off lifetime access when we launch. No payment today.</Text>
           </View>
         </Animated.View>
@@ -346,7 +361,7 @@ export default function WaitlistLandingPage() {
         {/* FINAL CTA */}
         <View style={[styles.finalCta, { maxWidth: containerMaxWidth }]}>
           <Text style={[styles.finalTitle, isDesktop && styles.finalTitleDesktop]}>The waitlist closes at 500.</Text>
-          <Text style={styles.finalSubtitle}>Founding member pricing disappears when we launch. Lock in your spot now — it takes 10 seconds and costs nothing.</Text>
+          <Text style={styles.finalSubtitle}>Founding member pricing disappears when we launch. Lock in your spot now. It takes 10 seconds and costs nothing.</Text>
           <TouchableOpacity style={styles.finalBtn} onPress={scrollToSignup} activeOpacity={0.8}>
             <Text style={styles.finalBtnText}>Reserve My Spot</Text>
             <Text style={styles.finalBtnArrow}>→</Text>
@@ -376,7 +391,7 @@ const styles = StyleSheet.create({
   hero: { width: '100%', paddingHorizontal: spacing[4], paddingTop: spacing[6], paddingBottom: spacing[10], alignItems: 'center' },
   headline: { color: '#fff', fontSize: 32, fontWeight: '800', textAlign: 'center', lineHeight: 40, marginBottom: spacing[4] },
   headlineDesktop: { fontSize: 52, lineHeight: 60 },
-  headlineAccent: { color: '#4ade80' },
+  headlineAccent: { color: '#f97316' },
   subheadline: { color: 'rgba(255,255,255,0.7)', fontSize: 16, textAlign: 'center', marginBottom: spacing[6], maxWidth: 600, lineHeight: 26, paddingHorizontal: spacing[2] },
 
   // Form Card
